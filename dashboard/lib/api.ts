@@ -45,6 +45,18 @@ export interface EmailLog {
   sent_at: string;
 }
 
+export interface WhatsAppLog {
+  id: string;
+  client_id: string;
+  policy_id?: string;
+  phone: string;
+  template_name: string;
+  message_body: string;
+  wa_message_id?: string;
+  status: string;
+  sent_at: string;
+}
+
 // --- Advisor ---
 export interface Advisor {
   id: string;
@@ -87,5 +99,9 @@ export const draftReminderEmail = (policy_id: string, advisor_name: string) =>
 
 export const sendReminderEmail = (policy_id: string, advisor_name: string) =>
   api.post("/api/v1/send-email/reminder", { policy_id, advisor_name }).then((r) => r.data);
+
+// --- WhatsApp ---
+export const sendWhatsAppReminder = (policy_id: string) =>
+  api.post("/api/v1/send-whatsapp/reminder", { policy_id }).then((r) => r.data);
 
 export default api;

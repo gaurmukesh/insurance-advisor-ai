@@ -6,7 +6,9 @@ from app.db.postgres import AsyncSessionLocal
 from app.models.policy import Policy
 from app.models.client import Client
 from app.models.email_log import EmailLog
+from app.models.whatsapp_log import WhatsAppLog
 from app.modules.email_generator import generate_premium_reminder_email
+from app.modules.whatsapp_handler import send_whatsapp_reminder, build_message_body
 from app.core.config import settings
 import logging
 
@@ -30,44 +32,75 @@ async def run_premium_reminder_job(days_ahead: int = 7):
         logger.info(f"Found {len(rows)} policies due on {target_date}")
 
         for policy, client in rows:
-            if not client.email:
-                logger.warning(f"Skipping {client.name} — no email address")
-                continue
+            email_content = None
 
-            try:
-                email_content = generate_premium_reminder_email(
-                    client_name=client.name,
-                    policy_no=policy.policy_no,
-                    product_name=policy.product_name,
-                    insurer_name=policy.insurer_name,
-                    premium_amount=policy.premium_amount,
-                    due_date=str(policy.next_due_date),
-                    advisor_name="Your Advisor",
+            # ── Email reminder ─────────────────────────────────────────────────
+            if client.email:
+                try:
+                    email_content = await generate_premium_reminder_email(
+                        client_name=client.name,
+                        policy_no=policy.policy_no,
+                        product_name=policy.product_name,
+                        insurer_name=policy.insurer_name,
+                        premium_amount=policy.premium_amount,
+                        due_date=str(policy.next_due_date),
+                        advisor_name="Your Advisor",
+                    )
+                    message = Mail(
+                        from_email=settings.SENDGRID_FROM_EMAIL,
+                        to_emails=client.email,
+                        subject=email_content["subject"],
+                        plain_text_content=email_content["body"],
+                    )
+                    sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+                    sg.send(message)
+                    email_status = "sent"
+                    logger.info(f"Email sent to {client.email} for policy {policy.policy_no}")
+                except Exception as e:
+                    email_status = "failed"
+                    logger.error(f"Email failed for {client.email}: {e}")
+
+                log = EmailLog(
+                    client_id=client.id,
+                    policy_id=policy.id,
+                    subject=email_content.get("subject", "Premium Reminder") if email_content else "Premium Reminder",
+                    body=email_content.get("body", "") if email_content else "",
+                    status=email_status,
                 )
+                db.add(log)
+            else:
+                logger.warning(f"Skipping email for {client.name} — no email address")
 
-                message = Mail(
-                    from_email=settings.SENDGRID_FROM_EMAIL,
-                    to_emails=client.email,
-                    subject=email_content["subject"],
-                    plain_text_content=email_content["body"],
+            # ── WhatsApp reminder ──────────────────────────────────────────────
+            if client.phone:
+                try:
+                    wa_status, wa_id = await send_whatsapp_reminder(
+                        phone=client.phone,
+                        client_name=client.name,
+                        policy_no=policy.policy_no,
+                        amount=policy.premium_amount,
+                        due_date=str(policy.next_due_date),
+                    )
+                except Exception as e:
+                    wa_status, wa_id = "failed", ""
+                    logger.error(f"WhatsApp failed for {client.phone}: {e}")
+
+                wa_log = WhatsAppLog(
+                    client_id=client.id,
+                    policy_id=policy.id,
+                    phone=client.phone,
+                    template_name="premium_reminder",
+                    message_body=build_message_body(
+                        client_name=client.name,
+                        policy_no=policy.policy_no,
+                        amount=policy.premium_amount,
+                        due_date=str(policy.next_due_date),
+                    ),
+                    wa_message_id=wa_id or None,
+                    status=wa_status,
                 )
-
-                sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
-                sg.send(message)
-                status = "sent"
-                logger.info(f"Reminder sent to {client.email} for policy {policy.policy_no}")
-
-            except Exception as e:
-                status = "failed"
-                logger.error(f"Failed to send reminder to {client.email}: {e}")
-
-            log = EmailLog(
-                client_id=client.id,
-                policy_id=policy.id,
-                subject=email_content.get("subject", "Premium Reminder"),
-                body=email_content.get("body", ""),
-                status=status,
-            )
-            db.add(log)
+                db.add(wa_log)
+            else:
+                logger.warning(f"Skipping WhatsApp for {client.name} — no phone number")
 
         await db.commit()

@@ -21,3 +21,4 @@ class Policy(Base):
 
     client: Mapped["Client"] = relationship("Client", back_populates="policies")
     email_logs: Mapped[list] = relationship("EmailLog", back_populates="policy")
+    whatsapp_logs: Mapped[list] = relationship("WhatsAppLog", back_populates="policy")

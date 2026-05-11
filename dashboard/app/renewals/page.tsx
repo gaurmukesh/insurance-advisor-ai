@@ -1,9 +1,9 @@
 "use client";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { getUpcomingRenewals, draftReminderEmail, sendReminderEmail } from "@/lib/api";
+import { getUpcomingRenewals, draftReminderEmail, sendReminderEmail, sendWhatsAppReminder } from "@/lib/api";
 import { useAdvisor } from "@/lib/AdvisorContext";
-import { Mail, Eye } from "lucide-react";
+import { Mail, Eye, MessageCircle } from "lucide-react";
 
 function EmailPreviewModal({ content, onClose, onSend, sending }: {
   content: { subject: string; body: string; client_email: string };
@@ -60,6 +60,13 @@ export default function RenewalsPage() {
     onSuccess: () => { setPreview(null); setSelectedPolicyId(""); },
   });
 
+  const [waSending, setWaSending] = useState<string | null>(null);
+  const waMutation = useMutation({
+    mutationFn: (policy_id: string) => sendWhatsAppReminder(policy_id),
+    onMutate: (policy_id) => setWaSending(policy_id),
+    onSettled: () => setWaSending(null),
+  });
+
   const urgencyColor = (date: string) => {
     const days = Math.ceil((new Date(date).getTime() - Date.now()) / 86400000);
     if (days <= 7) return "text-red-600 font-semibold";
@@ -108,14 +115,26 @@ export default function RenewalsPage() {
                   <td className="px-4 py-3 font-medium text-gray-800">₹{r.premium_amount.toLocaleString()}</td>
                   <td className={`px-4 py-3 ${urgencyColor(r.next_due_date)}`}>{r.next_due_date}</td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => draftMutation.mutate(r.policy_id)}
-                      disabled={draftMutation.isPending}
-                      className="flex items-center gap-1 text-xs text-blue-600 hover:underline disabled:opacity-50"
-                    >
-                      <Eye size={13} />
-                      {draftMutation.isPending && selectedPolicyId === r.policy_id ? "Drafting..." : "Preview & Send"}
-                    </button>
+                    <div className="flex flex-col gap-1.5">
+                      <button
+                        onClick={() => draftMutation.mutate(r.policy_id)}
+                        disabled={draftMutation.isPending}
+                        className="flex items-center gap-1 text-xs text-blue-600 hover:underline disabled:opacity-50"
+                      >
+                        <Eye size={13} />
+                        {draftMutation.isPending && selectedPolicyId === r.policy_id ? "Drafting..." : "Preview & Send Email"}
+                      </button>
+                      {r.client_phone && (
+                        <button
+                          onClick={() => waMutation.mutate(r.policy_id)}
+                          disabled={waSending === r.policy_id}
+                          className="flex items-center gap-1 text-xs text-green-600 hover:underline disabled:opacity-50"
+                        >
+                          <MessageCircle size={13} />
+                          {waSending === r.policy_id ? "Sending..." : "Send WhatsApp"}
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

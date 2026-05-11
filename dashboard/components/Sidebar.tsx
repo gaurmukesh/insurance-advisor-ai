@@ -1,13 +1,14 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, Bell, Mail, LayoutDashboard, Shield } from "lucide-react";
+import { Users, Bell, Mail, LayoutDashboard, Shield, MessageCircle } from "lucide-react";
 
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/leads", label: "Leads", icon: Users },
   { href: "/renewals", label: "Renewals", icon: Bell },
   { href: "/email-logs", label: "Email Logs", icon: Mail },
+  { href: "/whatsapp-logs", label: "WhatsApp Logs", icon: MessageCircle },
 ];
 
 export default function Sidebar() {
@@ -38,7 +39,7 @@ export default function Sidebar() {
         })}
       </nav>
       <div className="px-6 py-4 border-t border-gray-200 text-xs text-gray-400">
-        Phase 1 — v1.0.0
+        Phase 2 — v2.0.0
       </div>
     </aside>
   );
