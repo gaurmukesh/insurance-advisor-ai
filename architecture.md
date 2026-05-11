@@ -42,7 +42,7 @@ graph TB
     end
 
     subgraph Integrations["Integration Layer"]
-        LLM[Claude API - Sonnet 4.6]
+        LLM[OpenAI GPT-4o / GPT-4o-mini]
         SG[SendGrid - Email]
         WA_API[Meta WhatsApp Cloud API]
         CAL[Google Calendar API]
@@ -143,7 +143,7 @@ POST /api/v1/whatsapp/webhook      → Meta WhatsApp webhook receiver
 ```
 Input:  Age, income, family size, existing policies, goals, risk appetite
 Output: Insurance gap analysis + priority recommendations
-LLM:    Claude Sonnet 4.6
+LLM:    GPT-4o
 RAG:    Product catalog + IRDAI guidelines
 ```
 
@@ -151,7 +151,7 @@ RAG:    Product catalog + IRDAI guidelines
 ```
 Input:  Client profile + need analysis output
 Output: Top 3 product recommendations with comparison table
-LLM:    Claude Sonnet 4.6
+LLM:    GPT-4o
 RAG:    Policy PDFs from multiple insurers
 ```
 
@@ -159,7 +159,7 @@ RAG:    Policy PDFs from multiple insurers
 ```
 Input:  Client objection (e.g., "premium is too high")
 Output: Suggested response for advisor
-LLM:    Claude Sonnet 4.6
+LLM:    GPT-4o
 Mode:   Role-play simulation
 ```
 
@@ -167,7 +167,7 @@ Mode:   Role-play simulation
 ```
 Input:  Client name, policy details, due date, advisor name
 Output: Personalized email body (subject + content)
-LLM:    Claude Sonnet 4.6
+LLM:    GPT-4o-mini
 Trigger: Manual or Cron scheduler
 ```
 
@@ -175,7 +175,7 @@ Trigger: Manual or Cron scheduler
 ```
 Input:  Uploaded PDF (policy document)
 Output: Key highlights, exclusions, claim process summary
-LLM:    Claude Sonnet 4.6
+LLM:    GPT-4o
 RAG:    Chunked PDF embeddings
 ```
 
@@ -221,7 +221,7 @@ graph LR
     QEMB --> SEARCH[Similarity Search]
     VDB --> SEARCH
     SEARCH --> CONTEXT[Top K Chunks]
-    CONTEXT --> LLM[Claude - Final Answer]
+    CONTEXT --> LLM[OpenAI GPT-4o - Final Answer]
 ```
 
 ---
@@ -358,7 +358,7 @@ graph LR
 | Layer | Technology | Reason |
 |---|---|---|
 | Backend | Java Spring Boot or Python FastAPI | Your Java expertise; FastAPI for rapid AI iteration |
-| LLM | Claude API (Sonnet 4.6) | Best reasoning, cost-effective |
+| LLM | OpenAI GPT-4o / GPT-4o-mini | Strong reasoning; GPT-4o for complex tasks, GPT-4o-mini for simple ones |
 | Embeddings | OpenAI text-embedding-3-small | Fast, cheap, accurate |
 | Vector DB | PostgreSQL + pgvector | No separate infra needed |
 | Primary DB | PostgreSQL | Relational data, policy records |
@@ -684,7 +684,7 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 ```
 # LLM
-CLAUDE_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
 
 # Database
 DATABASE_URL=postgresql://admin:secret@db:5432/insurance_ai
@@ -708,4 +708,4 @@ SENTRY_DSN=...
 
 ---
 
-*Architecture Version: 1.5 | Date: April 2026 | Project: Insurance Advisor AI | Phase 1 Complete ✅*
+*Architecture Version: 1.6 | Date: May 2026 | Project: Insurance Advisor AI | Phase 1 Complete ✅*
