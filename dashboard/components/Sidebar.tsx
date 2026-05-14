@@ -1,12 +1,13 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, Bell, Mail, LayoutDashboard, Shield, MessageCircle } from "lucide-react";
+import { Users, Bell, Mail, LayoutDashboard, Shield, MessageCircle, Clock } from "lucide-react";
 
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/leads", label: "Leads", icon: Users },
   { href: "/renewals", label: "Renewals", icon: Bell },
+  { href: "/email-drafts", label: "Pending Approvals", icon: Clock },
   { href: "/email-logs", label: "Email Logs", icon: Mail },
   { href: "/whatsapp-logs", label: "WhatsApp Logs", icon: MessageCircle },
 ];

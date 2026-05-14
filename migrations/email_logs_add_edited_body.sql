@@ -1,0 +1,1 @@
+ALTER TABLE email_logs ADD COLUMN IF NOT EXISTS edited_body VARCHAR(5000);

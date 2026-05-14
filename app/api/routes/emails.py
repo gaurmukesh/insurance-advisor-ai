@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
+from typing import Optional
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from app.db.postgres import get_db
@@ -110,6 +111,77 @@ async def send_reminder(data: ReminderEmailRequest, db: AsyncSession = Depends(g
     await db.commit()
 
     return {"status": status, "client_email": client.email, **email_content}
+
+
+@router.get("/email-drafts")
+async def get_email_drafts(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(EmailLog, Client)
+        .join(Client, EmailLog.client_id == Client.id)
+        .where(EmailLog.status == "pending")
+        .order_by(EmailLog.sent_at.desc())
+    )
+    rows = result.all()
+    return [
+        {
+            "id": log.id,
+            "client_id": log.client_id,
+            "client_name": client.name,
+            "client_email": client.email,
+            "policy_id": log.policy_id,
+            "subject": log.subject,
+            "body": log.body,
+            "edited_body": log.edited_body,
+            "status": log.status,
+            "sent_at": log.sent_at,
+        }
+        for log, client in rows
+    ]
+
+
+class ApproveRequest(BaseModel):
+    edited_body: Optional[str] = None
+
+
+@router.post("/email-drafts/{draft_id}/approve")
+async def approve_draft(draft_id: str, data: ApproveRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(EmailLog, Client)
+        .join(Client, EmailLog.client_id == Client.id)
+        .where(EmailLog.id == draft_id)
+    )
+    row = result.one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Draft not found")
+
+    log, client = row
+    if log.status != "pending":
+        raise HTTPException(status_code=400, detail="Draft is not in pending state")
+    if not client.email:
+        raise HTTPException(status_code=400, detail="Client has no email address")
+
+    body_to_send = data.edited_body or log.body
+    sent = send_email(client.email, log.subject, body_to_send)
+
+    log.edited_body = data.edited_body or None
+    log.status = "sent" if sent else "failed"
+    await db.commit()
+
+    return {"status": log.status, "client_email": client.email}
+
+
+@router.post("/email-drafts/{draft_id}/reject")
+async def reject_draft(draft_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(EmailLog).where(EmailLog.id == draft_id))
+    log = result.scalar_one_or_none()
+    if not log:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    if log.status != "pending":
+        raise HTTPException(status_code=400, detail="Draft is not in pending state")
+
+    log.status = "rejected"
+    await db.commit()
+    return {"status": "rejected"}
 
 
 @router.post("/draft-email/followup")

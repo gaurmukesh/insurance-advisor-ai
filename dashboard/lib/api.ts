@@ -104,4 +104,26 @@ export const sendReminderEmail = (policy_id: string, advisor_name: string) =>
 export const sendWhatsAppReminder = (policy_id: string) =>
   api.post("/api/v1/send-whatsapp/reminder", { policy_id }).then((r) => r.data);
 
+// --- Email Drafts ---
+export interface EmailDraft {
+  id: string;
+  client_name: string;
+  client_email: string;
+  policy_id?: string;
+  subject: string;
+  body: string;
+  edited_body?: string;
+  status: string;
+  sent_at: string;
+}
+
+export const getEmailDrafts = () =>
+  api.get<EmailDraft[]>("/api/v1/email-drafts").then((r) => r.data);
+
+export const approveEmailDraft = (id: string, edited_body?: string) =>
+  api.post(`/api/v1/email-drafts/${id}/approve`, { edited_body: edited_body ?? null }).then((r) => r.data);
+
+export const rejectEmailDraft = (id: string) =>
+  api.post(`/api/v1/email-drafts/${id}/reject`).then((r) => r.data);
+
 export default api;

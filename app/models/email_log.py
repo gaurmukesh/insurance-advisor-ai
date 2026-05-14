@@ -12,7 +12,8 @@ class EmailLog(Base):
     policy_id: Mapped[str] = mapped_column(String, ForeignKey("policies.id"), nullable=True)
     subject: Mapped[str] = mapped_column(String(300))
     body: Mapped[str] = mapped_column(String(5000))
-    status: Mapped[str] = mapped_column(String(20), default="sent")  # sent, failed, opened
+    edited_body: Mapped[str] = mapped_column(String(5000), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="sent")  # pending, sent, failed, rejected, opened
     sent_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now())
     opened_at: Mapped[DateTime] = mapped_column(DateTime, nullable=True)
 
