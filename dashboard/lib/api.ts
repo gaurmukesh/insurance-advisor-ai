@@ -126,4 +126,14 @@ export const approveEmailDraft = (id: string, edited_body?: string) =>
 export const rejectEmailDraft = (id: string) =>
   api.post(`/api/v1/email-drafts/${id}/reject`).then((r) => r.data);
 
+// --- Pitch & Objection ---
+export const getCommonObjections = () =>
+  api.get<{ objections: string[] }>("/api/v1/pitch/common-objections").then((r) => r.data.objections);
+
+export const generatePitch = (client_id: string, existing_policies?: string) =>
+  api.post<{ pitch: string }>("/api/v1/generate-pitch", { client_id, existing_policies }).then((r) => r.data);
+
+export const handleObjection = (client_id: string, objection: string, existing_policies?: string) =>
+  api.post<{ objection: string; response: string }>("/api/v1/handle-objection", { client_id, objection, existing_policies }).then((r) => r.data);
+
 export default api;
