@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.core.observability import init_observability
 from app.db.postgres import init_db
-from app.api.routes import clients, recommendations, emails, ingest, advisors, whatsapp, pitch
+from app.api.routes import clients, recommendations, emails, ingest, advisors, whatsapp, pitch, documents, metrics
 from fastapi.middleware.cors import CORSMiddleware
 
 # Import all models so Base.metadata knows every table before create_all runs.
@@ -58,6 +58,8 @@ app.include_router(emails.router)
 app.include_router(ingest.router)
 app.include_router(whatsapp.router)
 app.include_router(pitch.router)
+app.include_router(documents.router)
+app.include_router(metrics.router)
 
 
 @app.get("/health")

@@ -136,4 +136,57 @@ export const generatePitch = (client_id: string, existing_policies?: string) =>
 export const handleObjection = (client_id: string, objection: string, existing_policies?: string) =>
   api.post<{ objection: string; response: string }>("/api/v1/handle-objection", { client_id, objection, existing_policies }).then((r) => r.data);
 
+// --- Metrics ---
+export interface Metrics {
+  leads: {
+    total: number;
+    by_status: { new: number; contacted: number; interested: number; converted: number; lost: number };
+    conversion_rate: number;
+  };
+  policies: {
+    total: number;
+    total_premium: number;
+    due_in_7_days: number;
+    due_in_30_days: number;
+  };
+  emails: { total: number; by_status: Record<string, number> };
+  whatsapp: { total: number; by_status: Record<string, number> };
+  recent_activity: Array<{
+    type: "email" | "whatsapp";
+    client: string;
+    detail: string;
+    status: string;
+    time: string | null;
+  }>;
+}
+
+export const getMetrics = (advisor_id: string) =>
+  api.get<Metrics>("/api/v1/metrics", { params: { advisor_id } }).then((r) => r.data);
+
+// --- Document Assistant ---
+export const summarizeDocument = (file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  return axios
+    .post<{ filename: string; summary: string }>(
+      `${process.env.NEXT_PUBLIC_API_URL}/api/v1/document-summary`,
+      form,
+      { headers: { "Content-Type": "multipart/form-data" } }
+    )
+    .then((r) => r.data);
+};
+
+export const compareDocuments = (fileA: File, fileB: File) => {
+  const form = new FormData();
+  form.append("file_a", fileA);
+  form.append("file_b", fileB);
+  return axios
+    .post<{ file_a: string; file_b: string; comparison: string }>(
+      `${process.env.NEXT_PUBLIC_API_URL}/api/v1/document-compare`,
+      form,
+      { headers: { "Content-Type": "multipart/form-data" } }
+    )
+    .then((r) => r.data);
+};
+
 export default api;

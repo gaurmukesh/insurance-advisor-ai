@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, Bell, Mail, LayoutDashboard, Shield, MessageCircle, Clock } from "lucide-react";
+import { Users, Bell, Mail, LayoutDashboard, Shield, MessageCircle, Clock, FileText, BarChart2 } from "lucide-react";
 
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -10,6 +10,8 @@ const nav = [
   { href: "/email-drafts", label: "Pending Approvals", icon: Clock },
   { href: "/email-logs", label: "Email Logs", icon: Mail },
   { href: "/whatsapp-logs", label: "WhatsApp Logs", icon: MessageCircle },
+  { href: "/documents", label: "Documents", icon: FileText },
+  { href: "/metrics", label: "Metrics", icon: BarChart2 },
 ];
 
 export default function Sidebar() {

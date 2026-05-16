@@ -388,8 +388,8 @@ graph LR
 - [ ] Pre-approved premium reminder template (Meta approval)
 - [ ] Human-in-the-loop email/WhatsApp approval before sending
 - [ ] Objection handling role-play
-- [ ] Document summarizer (PDF upload)
-- [ ] Business metrics dashboard
+- [x] Document summarizer (PDF upload)
+- [x] Business metrics dashboard
 
 ### Phase 3 — Scale (Months 4–6)
 - [ ] Multi-insurer product catalog (live scraping or APIs)
@@ -708,4 +708,4 @@ SENTRY_DSN=...
 
 ---
 
-*Architecture Version: 1.6 | Date: May 2026 | Project: Insurance Advisor AI | Phase 1 Complete ✅*
+*Architecture Version: 2.0 | Date: May 2026 | Project: Insurance Advisor AI | Phase 1 Complete ✅ | Phase 2 Complete ✅*
