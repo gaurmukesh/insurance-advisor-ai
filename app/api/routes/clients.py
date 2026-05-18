@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from pydantic import BaseModel
 from datetime import date, timedelta
+from typing import Optional
 from app.db.postgres import get_db
 from app.models.client import Client, LeadStatus
 from app.models.policy import Policy
@@ -107,3 +108,27 @@ async def upcoming_renewals(
         }
         for policy, client in rows
     ]
+
+
+class PolicyCreate(BaseModel):
+    client_id: str
+    insurer_name: str
+    product_name: str
+    policy_no: str
+    policy_type: str
+    premium_amount: float
+    sum_assured: Optional[float] = None
+    next_due_date: Optional[date] = None
+    expiry_date: Optional[date] = None
+
+
+@router.post("/policies", status_code=201)
+async def create_policy(data: PolicyCreate, db: AsyncSession = Depends(get_db)):
+    client_row = await db.execute(select(Client).where(Client.id == data.client_id))
+    if not client_row.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Client not found")
+    policy = Policy(**data.model_dump())
+    db.add(policy)
+    await db.commit()
+    await db.refresh(policy)
+    return policy
