@@ -35,7 +35,13 @@ async def analyze_client(data: AnalyzeRequest, db: AsyncSession = Depends(get_db
         "family_size": client.family_size,
         "risk_appetite": client.risk_appetite,
         "goals": client.goals,
-        "existing_policies": data.existing_policies or "None",
+        "existing_policies": data.existing_policies or client.existing_coverage or "None",
+        "existing_coverage": client.existing_coverage or "None",
+        "liabilities_emi": client.liabilities_emi or 0,
+        "employment_type": client.employment_type or "Not specified",
+        "health_conditions": client.health_conditions or "None",
+        "dependents_detail": client.dependents_detail or "None",
+        "city_tier": client.city_tier or "Not specified",
     }
 
     analysis = await analyze_client_needs(db, profile)
@@ -55,8 +61,15 @@ async def recommend(data: RecommendRequest, db: AsyncSession = Depends(get_db)):
         "family_size": client.family_size,
         "risk_appetite": client.risk_appetite,
         "goals": client.goals,
-        "existing_policies": data.existing_policies or "None",
+        "existing_policies": data.existing_policies or client.existing_coverage or "None",
+        "existing_coverage": client.existing_coverage or "None",
+        "liabilities_emi": client.liabilities_emi or 0,
+        "employment_type": client.employment_type or "Not specified",
+        "health_conditions": client.health_conditions or "None",
+        "dependents_detail": client.dependents_detail or "None",
+        "city_tier": client.city_tier or "Not specified",
     }
 
     recommendations = await recommend_products(db, profile, data.need_analysis)
     return {"client_id": client.id, "client_name": client.name, "recommendations": recommendations}
+

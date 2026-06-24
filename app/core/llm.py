@@ -1,6 +1,8 @@
 import openai
 from app.core.config import settings
 from app.core.observability import get_langfuse
+from app.core.pii_guard import scrub
+from app.core.semantic_cache import get_cached, set_cached
 
 client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
@@ -8,6 +10,12 @@ client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 async def _call(model: str, system_prompt: str, user_message: str, trace_name: str) -> str:
     langfuse = get_langfuse()
     trace = langfuse.trace(name=trace_name) if langfuse else None
+
+    user_message = scrub(user_message)
+
+    cached = await get_cached(system_prompt, user_message)
+    if cached:
+        return cached
 
     response = await client.chat.completions.create(
         model=model,
@@ -19,6 +27,8 @@ async def _call(model: str, system_prompt: str, user_message: str, trace_name: s
     )
 
     output = response.choices[0].message.content
+
+    await set_cached(system_prompt, user_message, output)
 
     if trace:
         trace.generation(

@@ -2,6 +2,7 @@
 import { useState, useRef } from "react";
 import { FileText, Upload, GitCompare, Loader2 } from "lucide-react";
 import { summarizeDocument, compareDocuments } from "@/lib/api";
+import ReactMarkdown from "react-markdown";
 
 type Mode = "summarize" | "compare";
 
@@ -42,8 +43,8 @@ function ResultBox({ title, text }: { title: string; text: string }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-2">
       <p className="text-sm font-semibold text-gray-700">{title}</p>
-      <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed max-h-[600px] overflow-y-auto">
-        {text}
+      <div className="text-sm text-gray-700 leading-relaxed max-h-[600px] overflow-y-auto [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:mt-4 [&_h2]:mb-1 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_li]:mt-0.5 [&_p]:mt-2">
+        <ReactMarkdown>{text}</ReactMarkdown>
       </div>
     </div>
   );

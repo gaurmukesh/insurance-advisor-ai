@@ -22,12 +22,24 @@ class ClientCreate(BaseModel):
     risk_appetite: str | None = None
     goals: str | None = None
     notes: str | None = None
+    existing_coverage: str | None = None
+    liabilities_emi: float | None = None
+    employment_type: str | None = None
+    health_conditions: str | None = None
+    dependents_detail: str | None = None
+    city_tier: str | None = None
 
 
 class ClientUpdate(BaseModel):
     status: str | None = None
     notes: str | None = None
     goals: str | None = None
+    existing_coverage: str | None = None
+    liabilities_emi: float | None = None
+    employment_type: str | None = None
+    health_conditions: str | None = None
+    dependents_detail: str | None = None
+    city_tier: str | None = None
 
 
 @router.post("/leads")

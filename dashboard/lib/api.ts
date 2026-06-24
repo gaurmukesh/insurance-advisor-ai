@@ -19,6 +19,12 @@ export interface Client {
   goals?: string;
   status: string;
   notes?: string;
+  existing_coverage?: string;
+  liabilities_emi?: number;
+  employment_type?: string;
+  health_conditions?: string;
+  dependents_detail?: string;
+  city_tier?: string;
   created_at: string;
 }
 
@@ -90,8 +96,23 @@ export const getUpcomingRenewals = (advisor_id: string, days = 30) =>
 export const analyzeClient = (client_id: string, existing_policies?: string) =>
   api.post("/api/v1/analyze-client", { client_id, existing_policies }).then((r) => r.data);
 
+export interface ProductRecommendation {
+  rank: number;
+  product_name: string;
+  insurer: string;
+  type: string;
+  premium_per_month: number;
+  sum_assured: string;
+  key_benefit: string;
+  why_suits: string;
+  tax_benefit: string;
+  pitch_first: boolean;
+}
+
 export const recommendProducts = (client_id: string, need_analysis: string) =>
-  api.post("/api/v1/recommend-products", { client_id, need_analysis }).then((r) => r.data);
+  api.post<{ client_id: string; client_name: string; recommendations: ProductRecommendation[] }>(
+    "/api/v1/recommend-products", { client_id, need_analysis }
+  ).then((r) => r.data);
 
 // --- Emails ---
 export const draftReminderEmail = (policy_id: string, advisor_name: string) =>
@@ -133,8 +154,17 @@ export const getCommonObjections = () =>
 export const generatePitch = (client_id: string, existing_policies?: string) =>
   api.post<{ pitch: string }>("/api/v1/generate-pitch", { client_id, existing_policies }).then((r) => r.data);
 
+export interface ObjectionResponse {
+  acknowledge: string;
+  reframe: string;
+  strong_reason: string;
+  client_specific_impact: string;
+  stat_or_fact: string;
+  closing_line: string;
+}
+
 export const handleObjection = (client_id: string, objection: string, existing_policies?: string) =>
-  api.post<{ objection: string; response: string }>("/api/v1/handle-objection", { client_id, objection, existing_policies }).then((r) => r.data);
+  api.post<{ objection: string; response: ObjectionResponse }>("/api/v1/handle-objection", { client_id, objection, existing_policies }).then((r) => r.data);
 
 // --- Metrics ---
 export interface Metrics {

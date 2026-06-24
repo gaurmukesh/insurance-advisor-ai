@@ -19,6 +19,18 @@ class RiskAppetite(str, enum.Enum):
     high = "high"
 
 
+class EmploymentType(str, enum.Enum):
+    salaried = "salaried"
+    self_employed = "self_employed"
+    business = "business"
+
+
+class CityTier(str, enum.Enum):
+    tier1 = "tier1"
+    tier2 = "tier2"
+    tier3 = "tier3"
+
+
 class Client(Base):
     __tablename__ = "clients"
 
@@ -34,6 +46,12 @@ class Client(Base):
     goals: Mapped[str] = mapped_column(String(500), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default=LeadStatus.new)
     notes: Mapped[str] = mapped_column(String(1000), nullable=True)
+    existing_coverage: Mapped[str] = mapped_column(String(1000), nullable=True)
+    liabilities_emi: Mapped[float] = mapped_column(Float, nullable=True)
+    employment_type: Mapped[str] = mapped_column(String(20), nullable=True)
+    health_conditions: Mapped[str] = mapped_column(String(500), nullable=True)
+    dependents_detail: Mapped[str] = mapped_column(String(1000), nullable=True)
+    city_tier: Mapped[str] = mapped_column(String(10), nullable=True)
     created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
