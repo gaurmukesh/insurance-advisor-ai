@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "insurance-advisor": {
+      "command": "python",
+      "args": ["-m", "app.mcp.server"],
+      "env": {
+        "DATABASE_URL": "${DATABASE_URL}",
+        "SYNC_DATABASE_URL": "${SYNC_DATABASE_URL}",
+        "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+        "LANGFUSE_SECRET_KEY": "${LANGFUSE_SECRET_KEY}",
+        "LANGFUSE_PUBLIC_KEY": "${LANGFUSE_PUBLIC_KEY}",
+        "SENDGRID_API_KEY": "${SENDGRID_API_KEY}",
+        "SENDGRID_FROM_EMAIL": "${SENDGRID_FROM_EMAIL}"
+      }
+    }
+  }
+}
