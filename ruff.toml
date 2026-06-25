@@ -1,0 +1,4 @@
+[lint]
+# F821 false-positives: SQLAlchemy string forward references in Mapped["ModelName"]
+# are resolved at runtime by the ORM registry, not at import time.
+per-file-ignores = { "app/models/*.py" = ["F821"] }

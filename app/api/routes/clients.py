@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from sqlalchemy import select
 from pydantic import BaseModel
 from datetime import date, timedelta
 from typing import Optional
 from app.db.postgres import get_db
-from app.models.client import Client, LeadStatus
+from app.models.client import Client
 from app.models.policy import Policy
 
 router = APIRouter(prefix="/api/v1", tags=["clients"])
