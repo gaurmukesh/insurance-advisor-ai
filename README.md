@@ -1,6 +1,6 @@
 # Insurance Advisor AI
 
-An AI-powered platform for insurance advisors — lead management, intelligent product recommendations, automated premium reminders, and AI-drafted client emails.
+An enterprise-grade AI platform for insurance advisors — agentic lead management, AI-powered need analysis, product recommendations, pitch generation, objection handling, and automated client communications.
 
 ---
 
@@ -8,16 +8,80 @@ An AI-powered platform for insurance advisors — lead management, intelligent p
 
 | Feature | Status |
 |---|---|
-| Client need analysis (AI) | ✅ Phase 1 |
-| Product recommendations via RAG | ✅ Phase 1 |
-| Lead management (CRUD + status tracking) | ✅ Phase 1 |
-| Premium reminder emails (automated + manual) | ✅ Phase 1 |
-| Next.js advisor dashboard | ✅ Phase 1 |
-| LangFuse + Sentry observability | ✅ Phase 1 |
-| WhatsApp reminders (Meta Cloud API) | 🔜 Phase 2 |
-| Pitch & objection handler | 🔜 Phase 2 |
-| Policy document assistant (PDF upload) | 🔜 Phase 2 |
-| Multi-advisor / team accounts | 🔜 Phase 3 |
+| Client need analysis (AI) | ✅ |
+| Product recommendations via RAG | ✅ |
+| Lead management (CRUD + status tracking) | ✅ |
+| Premium reminder emails (SendGrid) | ✅ |
+| WhatsApp reminders (Meta Cloud API) | ✅ |
+| Pitch & objection handler | ✅ |
+| Policy document assistant (PDF upload + RAG) | ✅ |
+| Business metrics dashboard | ✅ |
+| Human-in-loop email approval queue | ✅ |
+| MCP server (10 tools for Claude Desktop / Claude Code) | ✅ |
+| LangGraph agentic pipeline (6 agents) | ✅ |
+| Governance: PII guard + audit log + IRDAI guardrails | ✅ |
+| Prompt registry (versioned prompts in Postgres) | ✅ |
+| Semantic cache (Redis) | ✅ |
+| CI/CD with AI eval gate | ✅ |
+| Row-level security (multi-advisor isolation) | ✅ |
+| HNSW vector index (fast similarity search) | ✅ |
+| Next.js advisor dashboard | ✅ |
+| LangFuse + Sentry observability | ✅ |
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    ENTERPRISE AI PLATFORM                        │
+│                                                                   │
+│  ┌──────────────┐   ┌──────────────┐   ┌──────────────────────┐ │
+│  │  MCP Server  │   │  REST API    │   │  LangGraph Agents    │ │
+│  │  (10 tools)  │   │  (FastAPI)   │   │  (6 agents)          │ │
+│  └──────┬───────┘   └──────┬───────┘   └──────────┬───────────┘ │
+│         └──────────────────┴────────────────────────┘            │
+│                            │                                      │
+│              ┌─────────────▼─────────────┐                       │
+│              │       BaseAgent Core       │                       │
+│              │  PII Guard · Audit Log ·   │                       │
+│              │  Guardrails · LangFuse     │                       │
+│              └─────────────┬─────────────┘                       │
+│                            │                                      │
+│         ┌──────────────────┼──────────────────┐                  │
+│         ▼                  ▼                  ▼                   │
+│   ┌───────────┐    ┌──────────────┐   ┌──────────────┐          │
+│   │ PostgreSQL │    │  pgvector    │   │  Prompt      │          │
+│   │   + RLS    │    │ (HNSW index) │   │  Registry    │          │
+│   └───────────┘    └──────────────┘   └──────────────┘          │
+│                                                                   │
+│         ┌──────────────────────────────────────┐                 │
+│         │       Redis Semantic Cache            │                 │
+│         └──────────────────────────────────────┘                 │
+│                                                                   │
+│              ┌─────────────────────────────┐                     │
+│              │  CI/CD: lint→test→eval→deploy│                     │
+│              └─────────────────────────────┘                     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### LangGraph Agents
+
+| Agent | Role |
+|---|---|
+| `NeedsAnalysisAgent` | Identifies coverage gaps and 80C/80D tax opportunities |
+| `ProductMatchingAgent` | Parallel RAG search across policy docs for top-3 matches |
+| `ClaimsRenewalsAgent` | Scores renewal risk; drafts reminders to approval queue |
+| `PolicyResearchAgent` | Multi-hop document search for complex policy questions |
+| `ObjectionHandlerAgent` | Structured rebuttal generation for common objections |
+| `LeadNurturingAgent` | Orchestrator — chains agents end-to-end per lead lifecycle |
+
+### Governance Layer
+
+- **PII Guard** — strips Aadhaar, PAN, phone, and email before every LLM call
+- **Audit Log** — immutable SHA-256-hashed record of every AI decision in Postgres
+- **IRDAI Guardrails** — blocks outputs containing prohibited marketing claims ("guaranteed returns", "no risk", etc.)
+- **Prompt Registry** — versioned prompts stored in Postgres; update without redeployment
 
 ---
 
@@ -26,13 +90,18 @@ An AI-powered platform for insurance advisors — lead management, intelligent p
 | Layer | Technology |
 |---|---|
 | Backend | Python FastAPI (async) |
-| Database | PostgreSQL + pgvector |
+| Agents | LangGraph |
+| MCP | `mcp` (FastMCP server) |
+| Database | PostgreSQL + pgvector (HNSW index) |
+| Cache | Redis (semantic deduplication) |
 | LLM | OpenAI GPT-4o / GPT-4o-mini |
 | Embeddings | OpenAI text-embedding-3-small |
 | Email | SendGrid |
-| Scheduler | APScheduler |
+| WhatsApp | Meta Cloud API |
 | Observability | LangFuse + Sentry |
 | Frontend | Next.js 15 + Tailwind CSS + React Query |
+| CI/CD | GitHub Actions (lint → tests → AI eval gate → deploy) |
+| Linter | Ruff |
 | Container | Docker + docker-compose |
 
 ---
@@ -42,40 +111,52 @@ An AI-powered platform for insurance advisors — lead management, intelligent p
 ```
 insurance-advisor-ai/
 ├── app/
-│   ├── api/routes/          # FastAPI route handlers
-│   │   ├── advisors.py
-│   │   ├── clients.py
-│   │   ├── recommendations.py
-│   │   ├── emails.py
-│   │   └── ingest.py
+│   ├── agents/                  # LangGraph agents
+│   │   ├── needs_analysis_agent.py
+│   │   ├── product_matching_agent.py
+│   │   ├── claims_renewals_agent.py
+│   │   ├── policy_research_agent.py
+│   │   ├── objection_handler_agent.py
+│   │   └── lead_nurturing_agent.py  # Orchestrator
+│   ├── api/routes/              # FastAPI route handlers
 │   ├── core/
-│   │   ├── llm.py           # Async OpenAI client
-│   │   ├── rag.py           # RAG retrieval pipeline
-│   │   ├── config.py        # Settings from .env
-│   │   └── observability.py # LangFuse + Sentry init
-│   ├── modules/
-│   │   ├── need_analyzer.py
-│   │   ├── product_recommender.py
-│   │   └── email_generator.py
-│   ├── models/              # SQLAlchemy ORM models
+│   │   ├── base_agent.py        # Abstract base all agents inherit
+│   │   ├── llm.py               # OpenAI client + PII scrub + semantic cache
+│   │   ├── pii_guard.py         # Regex scrubber (Aadhaar/PAN/phone/email)
+│   │   ├── audit.py             # Immutable AI decision log
+│   │   ├── guardrails.py        # IRDAI output validation
+│   │   ├── prompt_registry.py   # Versioned prompts from Postgres
+│   │   ├── semantic_cache.py    # Redis-backed LLM response cache
+│   │   ├── config.py
+│   │   └── observability.py     # LangFuse + Sentry init
+│   ├── mcp/
+│   │   └── server.py            # MCP server — 10 tools for Claude Desktop
+│   ├── modules/                 # Core AI modules
+│   ├── models/                  # SQLAlchemy ORM models
 │   ├── db/
-│   │   ├── postgres.py      # Async engine + session
-│   │   └── vector_store.py  # pgvector store + search
+│   │   ├── postgres.py          # Async engine + RLS session dependency
+│   │   └── vector_store.py      # pgvector store + similarity search
 │   └── scheduler/
-│       └── premium_reminder.py
-├── dashboard/               # Next.js frontend
-│   ├── app/
-│   │   ├── page.tsx         # Overview dashboard
-│   │   ├── leads/           # Lead list + detail
-│   │   ├── renewals/        # Upcoming renewals + email
-│   │   └── email-logs/      # Email activity log
-│   ├── components/
-│   └── lib/
-│       ├── api.ts           # Axios API client
-│       └── AdvisorContext.tsx
-├── data/policies/           # Policy PDFs for RAG
-├── tests/                   # E2E test suite (19 tests)
-├── migrations/init.sql
+├── dashboard/                   # Next.js frontend
+│   └── app/
+│       ├── leads/               # Lead list + detail + pitch
+│       ├── documents/           # Policy document assistant
+│       └── metrics/             # Business metrics dashboard
+├── migrations/
+│   ├── init.sql                 # Base schema
+│   ├── agents.sql               # approval_queue + interactions tables
+│   ├── governance.sql           # ai_audit_log + prompt_registry tables
+│   ├── hnsw_index.sql           # HNSW index on embeddings
+│   └── rls.sql                  # Row-level security policies
+├── tests/
+│   ├── evals/
+│   │   ├── golden/              # Golden JSONL examples per agent
+│   │   └── run_evals.py         # Eval scorer (accuracy + latency)
+│   └── test_mcp_server.py
+├── .github/workflows/
+│   └── ai-deploy.yml            # CI/CD: lint → tests → eval gate → deploy
+├── .mcp.json                    # MCP server config for Claude Desktop
+├── ruff.toml
 ├── docker-compose.yml
 ├── Dockerfile
 └── requirements.txt
@@ -89,6 +170,7 @@ insurance-advisor-ai/
 - Docker + Docker Compose
 - Python 3.11+
 - Node.js 18+
+- Redis (optional — semantic cache degrades gracefully without it)
 
 ### 1. Clone and configure
 
@@ -98,14 +180,26 @@ cd insurance-advisor-ai
 cp .env.example .env
 ```
 
-Edit `.env` and fill in your keys:
+Edit `.env`:
 
 ```env
+# Required
 OPENAI_API_KEY=sk-...
 SENDGRID_API_KEY=SG....
 SENDGRID_FROM_EMAIL=you@example.com
 DATABASE_URL=postgresql+asyncpg://admin:secret@localhost:5432/insurance_ai
 SYNC_DATABASE_URL=postgresql://admin:secret@localhost:5432/insurance_ai
+
+# Optional — observability
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+
+# Optional — semantic cache
+REDIS_URL=redis://localhost:6379
+
+# Optional — WhatsApp
+WHATSAPP_PHONE_NUMBER_ID=...
+WHATSAPP_ACCESS_TOKEN=...
 ```
 
 ### 2. Start the database
@@ -114,33 +208,69 @@ SYNC_DATABASE_URL=postgresql://admin:secret@localhost:5432/insurance_ai
 docker compose up -d db
 ```
 
-### 3. Run the API
+### 3. Run migrations
+
+```bash
+psql $SYNC_DATABASE_URL -f migrations/init.sql
+psql $SYNC_DATABASE_URL -f migrations/agents.sql
+psql $SYNC_DATABASE_URL -f migrations/governance.sql
+psql $SYNC_DATABASE_URL -f migrations/hnsw_index.sql
+psql $SYNC_DATABASE_URL -f migrations/rls.sql
+```
+
+### 4. Run the API
 
 ```bash
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-API is live at `http://localhost:8000`
-Swagger docs at `http://localhost:8000/docs`
+API: `http://localhost:8000` · Swagger: `http://localhost:8000/docs`
 
-### 4. Run the dashboard
+### 5. Run the dashboard
 
 ```bash
 cd dashboard
-cp .env.local.example .env.local   # or create manually
-# Add: NEXT_PUBLIC_API_URL=http://localhost:8000
 npm install
 npm run dev
 ```
 
-Dashboard is live at `http://localhost:3000`
+Dashboard: `http://localhost:3000`
 
-### 5. Ingest policy PDFs (for RAG)
+### 6. Ingest policy PDFs (for RAG)
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/ingest \
-  -F "file=@data/policies/insurance_policy.pdf"
+  -F "file=@data/policies/sample_policy.pdf"
+```
+
+---
+
+## MCP Server (Claude Desktop / Claude Code)
+
+The `.mcp.json` at the project root auto-configures Claude Code. For Claude Desktop, add to MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "insurance-advisor": {
+      "command": "python",
+      "args": ["-m", "app.mcp.server"],
+      "env": {
+        "DATABASE_URL": "<your-db-url>",
+        "OPENAI_API_KEY": "<your-key>"
+      }
+    }
+  }
+}
+```
+
+Available tools: `list_leads`, `get_client`, `create_lead`, `update_lead_status`, `analyze_needs`, `get_recommendations`, `generate_sales_pitch`, `handle_client_objection`, `search_policy_docs`, `get_upcoming_renewals`
+
+Test the server starts cleanly:
+
+```bash
+python -m app.mcp.server
 ```
 
 ---
@@ -152,55 +282,52 @@ curl -X POST http://localhost:8000/api/v1/ingest \
 | GET | `/health` | Health check |
 | GET | `/api/v1/advisors` | List advisors |
 | POST | `/api/v1/leads` | Create a lead |
-| GET | `/api/v1/leads` | List leads (filter by advisor, status) |
-| GET | `/api/v1/leads/{id}` | Get lead detail |
+| GET | `/api/v1/leads` | List leads |
+| GET | `/api/v1/leads/{id}` | Lead detail |
 | PUT | `/api/v1/leads/{id}` | Update lead |
 | GET | `/api/v1/renewals/upcoming` | Policies due in N days |
 | POST | `/api/v1/analyze-client` | AI need analysis |
 | POST | `/api/v1/recommend-products` | AI product recommendations |
-| POST | `/api/v1/draft-email/reminder` | Draft premium reminder email |
-| POST | `/api/v1/send-email/reminder` | Send + log reminder email |
-| POST | `/api/v1/draft-email/followup` | Draft follow-up email |
+| POST | `/api/v1/pitch` | Generate sales pitch |
+| POST | `/api/v1/pitch/objection` | Handle client objection |
+| POST | `/api/v1/draft-email/reminder` | Draft premium reminder |
+| POST | `/api/v1/send-email/reminder` | Send + log reminder |
 | GET | `/api/v1/email-logs` | Email activity log |
-| POST | `/api/v1/ingest` | Ingest policy PDF into vector store |
+| GET | `/api/v1/approval-queue` | Human-in-loop queue |
+| POST | `/api/v1/approval-queue/{id}/approve` | Approve queued action |
+| POST | `/api/v1/ingest` | Ingest policy PDF |
+| POST | `/api/v1/documents/search` | Semantic policy search |
+| GET | `/api/v1/metrics` | Business metrics |
 
 ---
 
 ## Running Tests
 
 ```bash
-# Start test database
-docker compose up -d db
+# Unit + integration tests
+pytest tests/ -v --ignore=tests/evals
 
-# Run all 19 E2E tests
-pytest tests/ -v
+# AI eval harness (requires live OPENAI_API_KEY)
+python tests/evals/run_evals.py
 ```
-
-Tests use a separate `insurance_ai_test` database. External services (OpenAI, SendGrid) are mocked.
 
 ---
 
-## Architecture
+## CI/CD Pipeline
 
-See [architecture.md](architecture.md) for the full system design including RAG pipeline, WhatsApp flow, deployment plan, and phased roadmap.
+Five stages run on every push to `main`:
+
+```
+lint → unit-tests → eval-gate → build → deploy-staging
+```
+
+The **eval gate** runs real LLM calls against golden examples in `tests/evals/golden/`. If accuracy drops or latency spikes, the pipeline blocks the merge before the Docker image is built.
 
 ---
 
 ## Deployment
 
-Designed for AWS Lightsail (~$22/month for Phase 1):
-
 ```bash
 docker build -t insurance-advisor-ai .
-# Push to ECR and deploy via Lightsail Container Service
+# Push to ECR → deploy via AWS Lightsail Container Service
 ```
-
-See `architecture.md` → Section 8 for full step-by-step deployment instructions.
-
----
-
-## Roadmap
-
-- **Phase 1** ✅ — Core MVP: leads, AI advisory, email reminders, dashboard
-- **Phase 2** 🔜 — WhatsApp bot, objection handler, document assistant, human-in-loop approval
-- **Phase 3** 🔜 — Multi-advisor teams, mobile app, live insurer catalog, advanced analytics
