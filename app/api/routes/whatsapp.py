@@ -28,10 +28,54 @@ async def verify_webhook(
 
 
 @router.post("/whatsapp/webhook")
-async def receive_webhook(request: Request):
+async def receive_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     """Receive incoming WhatsApp messages / delivery status updates."""
+    from sqlalchemy import text
     body = await request.json()
-    logger.info(f"WhatsApp webhook received: {body}")
+    logger.info("WhatsApp webhook received")
+
+    try:
+        for entry in body.get("entry", []):
+            for change in entry.get("changes", []):
+                value = change.get("value", {})
+
+                for status in value.get("statuses", []):
+                    wa_id = status.get("id")
+                    new_status = status.get("status")
+                    if wa_id and new_status:
+                        await db.execute(
+                            text("UPDATE whatsapp_logs SET status = :s WHERE wa_message_id = :w"),
+                            {"s": new_status, "w": wa_id},
+                        )
+
+                for msg in value.get("messages", []):
+                    from_phone = msg.get("from", "").lstrip("91")
+                    msg_type = msg.get("type", "")
+                    msg_text = ""
+                    if msg_type == "text":
+                        msg_text = msg.get("text", {}).get("body", "")
+
+                    if from_phone:
+                        client_row = (await db.execute(
+                            select(Client).where(Client.phone == from_phone)
+                        )).scalar_one_or_none()
+                        if client_row:
+                            await db.execute(
+                                text("""
+                                    INSERT INTO interactions
+                                        (client_id, interaction_type, notes, created_at)
+                                    VALUES (:cid, 'whatsapp_inbound', :notes, now())
+                                """),
+                                {
+                                    "cid": client_row.id,
+                                    "notes": f"WhatsApp ({msg_type}): {msg_text[:500]}",
+                                },
+                            )
+
+        await db.commit()
+    except Exception as exc:
+        logger.error(f"WhatsApp webhook processing error: {exc}")
+
     return {"status": "ok"}
 
 

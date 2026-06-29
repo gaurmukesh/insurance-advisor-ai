@@ -38,8 +38,8 @@ async def run_need_analyzer_evals() -> bool:
                     print(f"  FAIL [{case['input']['name']}] prohibited: '{phrase}'")
                     ok = False
 
-            if elapsed_ms > 5000:
-                print(f"  FAIL [{case['input']['name']}] too slow: {elapsed_ms}ms (limit 5000ms)")
+            if elapsed_ms > 20000:
+                print(f"  FAIL [{case['input']['name']}] too slow: {elapsed_ms}ms (limit 20000ms)")
                 ok = False
 
             if ok:

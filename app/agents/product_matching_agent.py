@@ -4,7 +4,7 @@ import operator
 from typing import TypedDict, Annotated
 
 from langgraph.graph import StateGraph, END
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.db.postgres import AsyncSessionLocal
 from app.db.vector_store import similarity_search
@@ -121,6 +121,17 @@ Only one item should have pitch_first=true."""
 
 
 async def save_recs(state: ProductMatchingState) -> dict:
+    if not state.get("recommendations"):
+        return {}
+    async with AsyncSessionLocal() as db:
+        await db.execute(text("""
+            INSERT INTO interactions (client_id, interaction_type, notes, created_at)
+            VALUES (:client_id, 'ai_product_recommendations', :notes, now())
+        """), {
+            "client_id": state["client_id"],
+            "notes": json.dumps(state["recommendations"])[:2000],
+        })
+        await db.commit()
     return {}
 
 

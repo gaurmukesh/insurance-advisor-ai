@@ -94,7 +94,8 @@ def mock_llm():
     """Patch LLM chat functions so no real OpenAI calls are made."""
     with patch("app.modules.need_analyzer.chat", new_callable=AsyncMock) as mock_analyze, \
          patch("app.modules.product_recommender.chat", new_callable=AsyncMock) as mock_recommend, \
-         patch("app.modules.email_generator.chat", new_callable=AsyncMock) as mock_email:
+         patch("app.modules.email_generator.chat", new_callable=AsyncMock) as mock_email, \
+         patch("app.modules.need_analyzer.get_prompt", new_callable=AsyncMock, return_value=None):
         mock_analyze.return_value = (
             "MOCK ANALYSIS: Client needs term life cover and health insurance. "
             "Priority: HIGH - Term Plan ₹1Cr, MEDIUM - Health cover ₹5L."

@@ -1,16 +1,23 @@
 import json
+import logging
 import operator
 from datetime import date, timedelta
 from typing import TypedDict, Annotated
 
 from langgraph.graph import StateGraph, END
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 from sqlalchemy import select, text
 
+from app.core.config import settings
 from app.db.postgres import AsyncSessionLocal
+from app.models.advisor import Advisor
 from app.models.client import Client
 from app.models.policy import Policy
 from app.modules.email_generator import generate_premium_reminder_email
 from app.core.llm import chat
+
+logger = logging.getLogger(__name__)
 
 
 class RenewalAgentState(TypedDict):
@@ -127,7 +134,44 @@ async def queue_approval(state: RenewalAgentState) -> dict:
 
 
 async def notify_advisor(state: RenewalAgentState) -> dict:
-    print(f"[Renewals Agent] {len(state['approval_ids'])} items queued for {state['advisor_id']}")
+    count = len(state.get("approval_ids", []))
+    if not count:
+        return {}
+
+    async with AsyncSessionLocal() as db:
+        advisor = (await db.execute(
+            select(Advisor).where(Advisor.id == state["advisor_id"])
+        )).scalar_one_or_none()
+
+    if not advisor or not advisor.email:
+        logger.warning(f"[Renewals Agent] Advisor {state['advisor_id']} not found or has no email")
+        return {}
+
+    subject = f"[Action Required] {count} renewal reminder(s) awaiting your approval"
+    body = (
+        f"Hi {advisor.name},\n\n"
+        f"{count} renewal reminder draft(s) have been queued for your approval.\n\n"
+        f"Please log in to the dashboard to review and approve them before they are sent to clients.\n\n"
+        f"Queued IDs:\n" + "\n".join(f"  • {aid}" for aid in state["approval_ids"]) +
+        "\n\nRegards,\nInsurance Advisor AI"
+    )
+
+    if not settings.SENDGRID_API_KEY or not settings.SENDGRID_FROM_EMAIL:
+        logger.warning("[Renewals Agent] SendGrid not configured — skipping advisor notification")
+        return {}
+
+    try:
+        message = Mail(
+            from_email=settings.SENDGRID_FROM_EMAIL,
+            to_emails=advisor.email,
+            subject=subject,
+            plain_text_content=body,
+        )
+        SendGridAPIClient(settings.SENDGRID_API_KEY).send(message)
+        logger.info(f"[Renewals Agent] Notified {advisor.email} of {count} queued renewal(s)")
+    except Exception as exc:
+        logger.warning(f"[Renewals Agent] Failed to email advisor: {exc}")
+
     return {}
 
 
