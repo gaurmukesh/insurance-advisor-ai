@@ -1,11 +1,14 @@
 import json
 from app.core.llm import chat
+from app.core.guardrails import validate_output
 
 PITCH_SYSTEM_PROMPT = """You are an expert insurance sales coach in India.
 Generate a personalized sales pitch for an insurance advisor to use with their client.
 Be conversational, empathetic, and specific to the client's profile.
 Focus on real needs, not just products. Avoid jargon.
-Format: Opening → Key Need → Recommended Solution → Call to Action."""
+Format: Opening → Key Need → Recommended Solution → Call to Action.
+Never use IRDAI-prohibited phrases such as 'guaranteed returns', 'no risk',
+'risk-free', '100% safe investment', 'assured profit', or 'tax-free guaranteed'."""
 
 OBJECTION_SYSTEM_PROMPT = """You are an expert insurance sales coach in India.
 Help an insurance advisor deliver a strong, detailed response to a client objection.
@@ -52,7 +55,9 @@ Generate a sales pitch for the following client:
 
 Create a natural, personalized pitch the advisor can use in a conversation.
 """
-    return await chat(PITCH_SYSTEM_PROMPT, user_message, trace_name="pitch_generator")
+    output = await chat(PITCH_SYSTEM_PROMPT, user_message, trace_name="pitch_generator")
+    validate_output(output, context="generate_pitch")
+    return output
 
 
 async def handle_objection(objection: str, client_profile: dict) -> dict:

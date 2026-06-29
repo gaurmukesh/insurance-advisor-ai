@@ -13,6 +13,7 @@ from pathlib import Path
 from app.modules.need_analyzer import analyze_client_needs
 from app.modules.product_recommender import recommend_products
 from app.modules.email_generator import generate_premium_reminder_email
+from app.modules.pitch_handler import generate_pitch, handle_objection
 from app.db.postgres import AsyncSessionLocal
 
 
@@ -146,12 +147,72 @@ async def run_email_generator_evals() -> bool:
     return failed == 0
 
 
+async def run_pitch_handler_evals() -> bool:
+    golden = Path("tests/evals/golden/pitch_handler.jsonl")
+    passed = failed = 0
+
+    for line in golden.read_text().strip().splitlines():
+        case = json.loads(line)
+        case_type = case["type"]
+        name = f"{case.get('profile', {}).get('name', '?')} / {case.get('objection', 'pitch')}"
+        start = time.monotonic()
+        ok = True
+
+        if case_type == "pitch":
+            output = await generate_pitch(case["profile"])
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+            lower = output.lower()
+
+            for phrase in case.get("must_contain", []):
+                if phrase.lower() not in lower:
+                    print(f"  FAIL [{name}] missing: '{phrase}'")
+                    ok = False
+
+            for phrase in case.get("must_not_contain", []):
+                if phrase.lower() in lower:
+                    print(f"  FAIL [{name}] prohibited: '{phrase}'")
+                    ok = False
+
+            if len(output) < case.get("min_length", 0):
+                print(f"  FAIL [{name}] output too short: {len(output)} chars")
+                ok = False
+
+        elif case_type == "objection":
+            result = await handle_objection(case["objection"], case["profile"])
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+            all_text = " ".join(str(v) for v in result.values()).lower()
+
+            for key in case.get("required_keys", []):
+                if not result.get(key):
+                    print(f"  FAIL [{name}] missing/empty key: '{key}'")
+                    ok = False
+
+            for phrase in case.get("must_not_contain", []):
+                if phrase.lower() in all_text:
+                    print(f"  FAIL [{name}] prohibited: '{phrase}'")
+                    ok = False
+
+        if elapsed_ms > 20000:
+            print(f"  FAIL [{name}] too slow: {elapsed_ms}ms (limit 20000ms)")
+            ok = False
+
+        if ok:
+            passed += 1
+            print(f"  PASS [{name}] ({case_type}) {elapsed_ms}ms")
+        else:
+            failed += 1
+
+    print(f"\nPitch Handler Evals: {passed} passed, {failed} failed")
+    return failed == 0
+
+
 async def main():
     print("=== Running AI Evaluation Gate ===\n")
     results = [
         await run_need_analyzer_evals(),
         await run_product_recommender_evals(),
         await run_email_generator_evals(),
+        await run_pitch_handler_evals(),
     ]
     all_pass = all(results)
     print("\n" + ("ALL EVALS PASSED" if all_pass else "EVAL GATE FAILED — blocking deployment"))
