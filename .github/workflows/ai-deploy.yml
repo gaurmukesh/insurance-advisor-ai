@@ -79,6 +79,7 @@ jobs:
       - name: Run AI Evaluation Gate
         run: python tests/evals/run_evals.py
         env:
+          PYTHONPATH: .
           DATABASE_URL: postgresql+asyncpg://admin:secret@localhost:5432/insurance_ai_eval
           SYNC_DATABASE_URL: postgresql://admin:secret@localhost:5432/insurance_ai_eval
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
