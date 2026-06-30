@@ -101,6 +101,11 @@ jobs:
       image: ${{ steps.push.outputs.image }}
     steps:
       - uses: actions/checkout@v4
+      - name: Install lightsailctl plugin
+        run: |
+          sudo curl -sL "https://s3.us-west-2.amazonaws.com/lightsailctl/latest/linux-amd64/lightsailctl" \
+            -o /usr/local/bin/lightsailctl
+          sudo chmod +x /usr/local/bin/lightsailctl
       - name: Build image
         run: docker build -t insurance-advisor-ai:${{ github.sha }} .
       - name: Push to Lightsail registry
