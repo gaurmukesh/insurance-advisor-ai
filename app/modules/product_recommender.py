@@ -2,9 +2,12 @@ import json
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.llm import chat
 from app.core.rag import retrieve_context
+from app.core.guardrails import validate_output
 
 SYSTEM_PROMPT = """You are an expert insurance product advisor in India.
 Recommend the top 3 most suitable insurance products for the client.
+Never use IRDAI-prohibited phrases such as 'guaranteed returns', 'no risk',
+'risk-free', '100% safe investment', 'assured profit', or 'tax-free guaranteed'.
 You MUST respond with valid JSON only — no markdown, no explanation outside the JSON.
 Return exactly this structure:
 [
@@ -54,6 +57,7 @@ Available Policy Information:
 """
 
     raw = await chat(SYSTEM_PROMPT, user_message, trace_name="product_recommender")
+    validate_output(raw, context="product_recommender")
 
     try:
         # strip markdown code fences if the model adds them
