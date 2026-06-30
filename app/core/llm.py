@@ -4,7 +4,14 @@ from app.core.observability import get_langfuse
 from app.core.pii_guard import scrub
 from app.core.semantic_cache import get_cached, set_cached
 
-client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+_client: openai.AsyncOpenAI | None = None
+
+
+def _get_client() -> openai.AsyncOpenAI:
+    global _client
+    if _client is None:
+        _client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    return _client
 
 
 async def _call(model: str, system_prompt: str, user_message: str, trace_name: str) -> str:
@@ -17,7 +24,7 @@ async def _call(model: str, system_prompt: str, user_message: str, trace_name: s
     if cached:
         return cached
 
-    response = await client.chat.completions.create(
+    response = await _get_client().chat.completions.create(
         model=model,
         max_tokens=2048,
         messages=[
