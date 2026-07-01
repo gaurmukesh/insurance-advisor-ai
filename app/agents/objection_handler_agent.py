@@ -90,8 +90,8 @@ async def log_interaction(state: ObjectionHandlerState) -> dict:
     )
     async with AsyncSessionLocal() as db:
         result = await db.execute(text("""
-            INSERT INTO interactions (client_id, interaction_type, notes, created_at)
-            VALUES (:client_id, 'objection_handled', :notes, now())
+            INSERT INTO interactions (id, client_id, interaction_type, notes, created_at)
+            VALUES (gen_random_uuid()::text, :client_id, 'objection_handled', :notes, now())
             RETURNING id
         """), {"client_id": state["client_id"], "notes": notes[:1000]})
         row = result.fetchone()

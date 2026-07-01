@@ -88,8 +88,8 @@ Analysis:
 async def save_interaction(state: NeedsAnalysisState) -> dict:
     async with AsyncSessionLocal() as db:
         result = await db.execute(text("""
-            INSERT INTO interactions (client_id, interaction_type, notes, created_at)
-            VALUES (:client_id, 'ai_needs_analysis', :notes, now())
+            INSERT INTO interactions (id, client_id, interaction_type, notes, created_at)
+            VALUES (gen_random_uuid()::text, :client_id, 'ai_needs_analysis', :notes, now())
             RETURNING id
         """), {"client_id": state["client_id"], "notes": state["analysis_text"][:1000]})
         row = result.fetchone()

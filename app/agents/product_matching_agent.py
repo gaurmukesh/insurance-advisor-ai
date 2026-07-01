@@ -125,8 +125,8 @@ async def save_recs(state: ProductMatchingState) -> dict:
         return {}
     async with AsyncSessionLocal() as db:
         await db.execute(text("""
-            INSERT INTO interactions (client_id, interaction_type, notes, created_at)
-            VALUES (:client_id, 'ai_product_recommendations', :notes, now())
+            INSERT INTO interactions (id, client_id, interaction_type, notes, created_at)
+            VALUES (gen_random_uuid()::text, :client_id, 'ai_product_recommendations', :notes, now())
         """), {
             "client_id": state["client_id"],
             "notes": json.dumps(state["recommendations"])[:2000],
