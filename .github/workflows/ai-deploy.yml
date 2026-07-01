@@ -111,6 +111,7 @@ jobs:
       - name: Push to Lightsail registry
         id: push
         run: |
+          set -o pipefail
           aws lightsail push-container-image \
             --region ap-south-1 \
             --service-name ${{ vars.LIGHTSAIL_SERVICE_NAME }} \
