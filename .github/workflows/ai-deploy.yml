@@ -141,6 +141,7 @@ jobs:
                 \"ports\": {\"8000\": \"HTTP\"},
                 \"environment\": {
                   \"DATABASE_URL\": \"${{ secrets.PROD_DATABASE_URL }}\",
+                  \"SYNC_DATABASE_URL\": \"${{ secrets.PROD_SYNC_DATABASE_URL }}\",
                   \"OPENAI_API_KEY\": \"${{ secrets.OPENAI_API_KEY }}\",
                   \"SENDGRID_API_KEY\": \"${{ secrets.SENDGRID_API_KEY }}\",
                   \"SENDGRID_FROM_EMAIL\": \"${{ secrets.SENDGRID_FROM_EMAIL }}\",
