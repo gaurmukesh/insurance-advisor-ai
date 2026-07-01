@@ -6,7 +6,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.core.observability import init_observability
 from app.core.rag import sync_policies
 from app.db.postgres import init_db, AsyncSessionLocal
-from app.api.routes import clients, recommendations, emails, ingest, advisors, whatsapp, pitch, documents, metrics
+from app.api.routes import clients, recommendations, emails, ingest, advisors, whatsapp, pitch, documents, metrics, agents
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
@@ -69,6 +69,7 @@ app.include_router(whatsapp.router)
 app.include_router(pitch.router)
 app.include_router(documents.router)
 app.include_router(metrics.router)
+app.include_router(agents.router)
 
 
 @app.get("/health")
