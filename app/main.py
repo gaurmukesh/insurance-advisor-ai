@@ -4,7 +4,8 @@ from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.core.observability import init_observability
-from app.db.postgres import init_db
+from app.core.rag import sync_policies
+from app.db.postgres import init_db, AsyncSessionLocal
 from app.api.routes import clients, recommendations, emails, ingest, advisors, whatsapp, pitch, documents, metrics
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -30,6 +31,11 @@ async def lifespan(app: FastAPI):
     init_observability()
     await init_db()
     logger.info("Database initialized")
+
+    async with AsyncSessionLocal() as db:
+        new_chunks = await sync_policies(db)
+        if new_chunks:
+            logger.info(f"RAG sync: {new_chunks} new chunks ingested from data/policies/")
 
     scheduler.add_job(run_premium_reminder_job, "cron", hour=8, minute=0)
     scheduler.start()
