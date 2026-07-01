@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Insurance Advisor AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .tab-active { @apply bg-blue-600 text-white; }
+    .spinner { border: 3px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; width: 20px; height: 20px; animation: spin 0.8s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .ai-output { white-space: pre-wrap; font-size: 0.875rem; line-height: 1.6; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans">
+
+<!-- Header -->
+<header class="bg-blue-700 text-white px-6 py-4 flex items-center justify-between shadow-md">
+  <div class="flex items-center gap-3">
+    <span class="text-2xl">🛡️</span>
+    <div>
+      <h1 class="text-xl font-bold leading-tight">Insurance Advisor AI</h1>
+      <p class="text-blue-200 text-xs">AI-powered advisor platform</p>
+    </div>
+  </div>
+  <div class="flex items-center gap-2">
+    <label class="text-sm text-blue-200">Advisor:</label>
+    <select id="advisorSelect" onchange="selectAdvisor(this.value)" class="text-sm bg-blue-800 border border-blue-500 rounded px-2 py-1 text-white">
+      <option value="">— select —</option>
+    </select>
+    <button onclick="showSection('advisors')" class="text-xs bg-blue-500 hover:bg-blue-400 px-2 py-1 rounded">+ New</button>
+  </div>
+</header>
+
+<!-- Nav -->
+<nav class="bg-white border-b shadow-sm flex gap-1 px-4 pt-3">
+  <button onclick="showSection('clients')"      id="tab-clients"      class="tab px-4 py-2 rounded-t text-sm font-medium text-gray-600 hover:bg-gray-100">Clients</button>
+  <button onclick="showSection('addClient')"    id="tab-addClient"    class="tab px-4 py-2 rounded-t text-sm font-medium text-gray-600 hover:bg-gray-100">+ Add Client</button>
+  <button onclick="showSection('policies')"     id="tab-policies"     class="tab px-4 py-2 rounded-t text-sm font-medium text-gray-600 hover:bg-gray-100">Policies</button>
+  <button onclick="showSection('renewals')"     id="tab-renewals"     class="tab px-4 py-2 rounded-t text-sm font-medium text-gray-600 hover:bg-gray-100">Renewals</button>
+  <button onclick="showSection('ai')"           id="tab-ai"           class="tab px-4 py-2 rounded-t text-sm font-medium text-gray-600 hover:bg-gray-100">AI Tools</button>
+  <button onclick="showSection('advisors')"     id="tab-advisors"     class="tab px-4 py-2 rounded-t text-sm font-medium text-gray-600 hover:bg-gray-100">Advisors</button>
+</nav>
+
+<main class="max-w-5xl mx-auto px-4 py-6 space-y-4">
+
+  <!-- CLIENTS LIST -->
+  <section id="sec-clients" class="hidden">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-lg font-bold text-gray-800">Clients</h2>
+      <button onclick="loadClients()" class="text-sm text-blue-600 hover:underline">Refresh</button>
+    </div>
+    <div id="clientsTable" class="bg-white rounded-xl shadow overflow-hidden">
+      <p class="text-gray-400 text-sm p-6">Select an advisor to load clients.</p>
+    </div>
+  </section>
+
+  <!-- ADD CLIENT -->
+  <section id="sec-addClient" class="hidden">
+    <div class="bg-white rounded-xl shadow p-6">
+      <h2 class="text-lg font-bold text-gray-800 mb-4">Add New Client</h2>
+      <form onsubmit="createClient(event)" class="grid grid-cols-2 gap-4">
+        <div class="col-span-2 grid grid-cols-2 gap-4">
+          <div><label class="label">Full Name *</label><input name="name" required class="input" placeholder="Rahul Sharma" /></div>
+          <div><label class="label">Email</label><input name="email" type="email" class="input" placeholder="rahul@example.com" /></div>
+          <div><label class="label">Phone</label><input name="phone" class="input" placeholder="9876543210" /></div>
+          <div><label class="label">Age</label><input name="age" type="number" class="input" placeholder="32" /></div>
+          <div><label class="label">Annual Income (₹)</label><input name="income" type="number" class="input" placeholder="800000" /></div>
+          <div><label class="label">Family Size</label><input name="family_size" type="number" class="input" placeholder="4" /></div>
+          <div><label class="label">Monthly EMI (₹)</label><input name="liabilities_emi" type="number" class="input" placeholder="20000" /></div>
+          <div>
+            <label class="label">Risk Appetite</label>
+            <select name="risk_appetite" class="input">
+              <option value="">— select —</option>
+              <option>low</option><option>medium</option><option>high</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Employment Type</label>
+            <select name="employment_type" class="input">
+              <option value="">— select —</option>
+              <option>salaried</option><option>self_employed</option><option>business</option><option>retired</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">City Tier</label>
+            <select name="city_tier" class="input">
+              <option value="">— select —</option>
+              <option>tier1</option><option>tier2</option><option>tier3</option>
+            </select>
+          </div>
+          <div class="col-span-2"><label class="label">Goals</label><input name="goals" class="input" placeholder="children education and retirement" /></div>
+          <div class="col-span-2"><label class="label">Health Conditions</label><input name="health_conditions" class="input" placeholder="None / diabetes / hypertension" /></div>
+          <div class="col-span-2"><label class="label">Existing Coverage</label><input name="existing_coverage" class="input" placeholder="None / term 1 crore" /></div>
+          <div class="col-span-2"><label class="label">Dependents Detail</label><input name="dependents_detail" class="input" placeholder="spouse, 2 kids" /></div>
+        </div>
+        <div class="col-span-2 flex gap-3">
+          <button type="submit" class="btn-primary">Create Client</button>
+          <span id="clientMsg" class="text-sm self-center"></span>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- POLICIES -->
+  <section id="sec-policies" class="hidden">
+    <div class="bg-white rounded-xl shadow p-6 mb-4">
+      <h2 class="text-lg font-bold text-gray-800 mb-4">Add Policy</h2>
+      <form onsubmit="createPolicy(event)" class="grid grid-cols-2 gap-4">
+        <div class="col-span-2">
+          <label class="label">Client *</label>
+          <select id="policyClientSelect" name="client_id" required class="input">
+            <option value="">— select client —</option>
+          </select>
+        </div>
+        <div><label class="label">Insurer Name *</label><input name="insurer_name" required class="input" placeholder="HDFC Life" /></div>
+        <div><label class="label">Product Name *</label><input name="product_name" required class="input" placeholder="Click 2 Protect" /></div>
+        <div><label class="label">Policy Number *</label><input name="policy_no" required class="input" placeholder="HDFC-2024-001" /></div>
+        <div>
+          <label class="label">Policy Type *</label>
+          <select name="policy_type" required class="input">
+            <option value="">— select —</option>
+            <option>term</option><option>health</option><option>ulip</option><option>personal_accident</option><option>motor</option><option>other</option>
+          </select>
+        </div>
+        <div><label class="label">Premium Amount (₹) *</label><input name="premium_amount" type="number" required class="input" placeholder="18000" /></div>
+        <div><label class="label">Sum Assured (₹)</label><input name="sum_assured" type="number" class="input" placeholder="10000000" /></div>
+        <div><label class="label">Next Due Date</label><input name="next_due_date" type="date" class="input" /></div>
+        <div><label class="label">Expiry Date</label><input name="expiry_date" type="date" class="input" /></div>
+        <div class="col-span-2 flex gap-3">
+          <button type="submit" class="btn-primary">Add Policy</button>
+          <span id="policyMsg" class="text-sm self-center"></span>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- RENEWALS -->
+  <section id="sec-renewals" class="hidden">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-lg font-bold text-gray-800">Upcoming Renewals</h2>
+      <div class="flex gap-2 items-center">
+        <label class="text-sm text-gray-500">Next</label>
+        <select id="renewalDays" onchange="loadRenewals()" class="input text-sm py-1 w-24">
+          <option value="30">30 days</option>
+          <option value="60">60 days</option>
+          <option value="90">90 days</option>
+        </select>
+      </div>
+    </div>
+    <div id="renewalsTable" class="bg-white rounded-xl shadow overflow-hidden">
+      <p class="text-gray-400 text-sm p-6">Select an advisor to load renewals.</p>
+    </div>
+  </section>
+
+  <!-- AI TOOLS -->
+  <section id="sec-ai" class="hidden space-y-6">
+    <div class="bg-white rounded-xl shadow p-6">
+      <h2 class="text-lg font-bold text-gray-800 mb-4">AI Tools</h2>
+      <div class="mb-4">
+        <label class="label">Select Client</label>
+        <select id="aiClientSelect" onchange="setAiClient(this.value)" class="input max-w-sm">
+          <option value="">— select client —</option>
+        </select>
+      </div>
+
+      <!-- Analyze Needs -->
+      <div class="border rounded-lg p-4 mb-4">
+        <div class="flex justify-between items-center mb-2">
+          <h3 class="font-semibold text-gray-700">Analyze Client Needs</h3>
+          <button onclick="analyzeClient()" class="btn-ai">Run Analysis</button>
+        </div>
+        <div id="analyzeOutput" class="hidden mt-3 bg-blue-50 rounded-lg p-4 ai-output text-gray-700"></div>
+      </div>
+
+      <!-- Recommend Products -->
+      <div class="border rounded-lg p-4 mb-4">
+        <div class="flex justify-between items-center mb-2">
+          <h3 class="font-semibold text-gray-700">Recommend Products</h3>
+          <button onclick="recommendProducts()" class="btn-ai">Get Recommendations</button>
+        </div>
+        <textarea id="needAnalysisInput" class="input w-full mt-2 text-sm" rows="3" placeholder="Paste need analysis here, or run Analyze first..."></textarea>
+        <div id="recommendOutput" class="hidden mt-3 space-y-3"></div>
+      </div>
+
+      <!-- Generate Pitch -->
+      <div class="border rounded-lg p-4 mb-4">
+        <div class="flex justify-between items-center mb-2">
+          <h3 class="font-semibold text-gray-700">Generate Sales Pitch</h3>
+          <button onclick="generatePitch()" class="btn-ai">Generate Pitch</button>
+        </div>
+        <div id="pitchOutput" class="hidden mt-3 bg-green-50 rounded-lg p-4 ai-output text-gray-700"></div>
+      </div>
+
+      <!-- Handle Objection -->
+      <div class="border rounded-lg p-4">
+        <div class="flex justify-between items-center mb-2">
+          <h3 class="font-semibold text-gray-700">Handle Objection</h3>
+          <button onclick="handleObjection()" class="btn-ai">Get Response</button>
+        </div>
+        <select id="objectionSelect" class="input max-w-md mt-2">
+          <option value="premium is too high">premium is too high</option>
+          <option value="I already have insurance">I already have insurance</option>
+          <option value="I will think about it">I will think about it</option>
+          <option value="I don't trust insurance companies">I don't trust insurance companies</option>
+          <option value="I am young and healthy, I don't need it">I am young and healthy, I don't need it</option>
+          <option value="my employer already covers me">my employer already covers me</option>
+        </select>
+        <div id="objectionOutput" class="hidden mt-3 space-y-2"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ADVISORS -->
+  <section id="sec-advisors" class="hidden">
+    <div class="grid grid-cols-2 gap-6">
+      <div class="bg-white rounded-xl shadow p-6">
+        <h2 class="text-lg font-bold text-gray-800 mb-4">Create Advisor</h2>
+        <form onsubmit="createAdvisor(event)" class="space-y-3">
+          <div><label class="label">Full Name *</label><input name="name" required class="input" placeholder="Ravi Kumar" /></div>
+          <div><label class="label">Email *</label><input name="email" type="email" required class="input" placeholder="ravi@example.com" /></div>
+          <div><label class="label">Phone *</label><input name="phone" required class="input" placeholder="9876543210" /></div>
+          <div><label class="label">License No</label><input name="license_no" class="input" placeholder="IRDAI-12345" /></div>
+          <div class="flex gap-3">
+            <button type="submit" class="btn-primary">Create</button>
+            <span id="advisorMsg" class="text-sm self-center"></span>
+          </div>
+        </form>
+      </div>
+      <div class="bg-white rounded-xl shadow p-6">
+        <h2 class="text-lg font-bold text-gray-800 mb-4">Advisors</h2>
+        <div id="advisorsList" class="space-y-2 text-sm text-gray-500">Loading...</div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<style>
+  .label { display: block; font-size: 0.75rem; font-weight: 600; color: #6b7280; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .input { width: 100%; border: 1px solid #d1d5db; border-radius: 0.5rem; padding: 0.5rem 0.75rem; font-size: 0.875rem; outline: none; transition: border-color 0.15s; }
+  .input:focus { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.15); }
+  .btn-primary { background: #2563eb; color: white; font-size: 0.875rem; font-weight: 600; padding: 0.5rem 1.25rem; border-radius: 0.5rem; cursor: pointer; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-ai { background: #7c3aed; color: white; font-size: 0.8rem; font-weight: 600; padding: 0.375rem 0.875rem; border-radius: 0.5rem; cursor: pointer; white-space: nowrap; }
+  .btn-ai:hover { background: #6d28d9; }
+</style>
+
+<script>
+  const API = '/api/v1';
+  let currentAdvisorId = null;
+  let currentAiClientId = null;
+  let lastAnalysis = '';
+
+  // ── Section routing ──────────────────────────────────────────
+  function showSection(name) {
+    document.querySelectorAll('[id^="sec-"]').forEach(s => s.classList.add('hidden'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('bg-blue-600','text-white'));
+    document.getElementById('sec-' + name).classList.remove('hidden');
+    const tab = document.getElementById('tab-' + name);
+    if (tab) tab.classList.add('bg-blue-600', 'text-white');
+    if (name === 'clients') loadClients();
+    if (name === 'renewals') loadRenewals();
+    if (name === 'advisors') loadAdvisors();
+    if (name === 'policies' || name === 'ai') populateClientDropdowns();
+  }
+
+  // ── Advisors ─────────────────────────────────────────────────
+  async function loadAdvisors() {
+    const res = await fetch(`${API}/advisors`);
+    const data = await res.json();
+    const select = document.getElementById('advisorSelect');
+    select.innerHTML = '<option value="">— select —</option>';
+    const list = document.getElementById('advisorsList');
+    list.innerHTML = '';
+    data.forEach(a => {
+      select.innerHTML += `<option value="${a.id}">${a.name}</option>`;
+      list.innerHTML += `
+        <div class="flex items-center justify-between border rounded-lg p-3">
+          <div>
+            <p class="font-semibold text-gray-800">${a.name}</p>
+            <p class="text-gray-400">${a.email} · ${a.phone}</p>
+          </div>
+          <button onclick="selectAdvisor('${a.id}')" class="text-xs text-blue-600 hover:underline">Select</button>
+        </div>`;
+    });
+    if (!data.length) list.innerHTML = '<p class="text-gray-400">No advisors yet.</p>';
+  }
+
+  async function createAdvisor(e) {
+    e.preventDefault();
+    const form = e.target;
+    const payload = Object.fromEntries(new FormData(form));
+    const res = await fetch(`${API}/advisors`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const msg = document.getElementById('advisorMsg');
+    if (res.ok) {
+      const a = await res.json();
+      msg.textContent = '✓ Created!';
+      msg.className = 'text-sm self-center text-green-600';
+      form.reset();
+      loadAdvisors();
+    } else {
+      const err = await res.json();
+      msg.textContent = '✗ ' + (err.detail || 'Error');
+      msg.className = 'text-sm self-center text-red-600';
+    }
+  }
+
+  function selectAdvisor(id) {
+    currentAdvisorId = id;
+    document.getElementById('advisorSelect').value = id;
+    if (id) { showSection('clients'); }
+  }
+
+  // ── Clients ──────────────────────────────────────────────────
+  async function loadClients() {
+    if (!currentAdvisorId) { document.getElementById('clientsTable').innerHTML = '<p class="text-gray-400 text-sm p-6">Select an advisor first.</p>'; return; }
+    const res = await fetch(`${API}/leads?advisor_id=${currentAdvisorId}`);
+    const data = await res.json();
+    const el = document.getElementById('clientsTable');
+    if (!data.length) { el.innerHTML = '<p class="text-gray-400 text-sm p-6">No clients yet. Add one.</p>'; return; }
+    el.innerHTML = `
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 border-b">
+          <tr>${['Name','Age','Income','Risk','Goals','Status','Actions'].map(h => `<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">${h}</th>`).join('')}</tr>
+        </thead>
+        <tbody>
+          ${data.map(c => `
+            <tr class="border-b hover:bg-gray-50">
+              <td class="px-4 py-3 font-medium text-gray-800">${c.name}</td>
+              <td class="px-4 py-3 text-gray-500">${c.age || '—'}</td>
+              <td class="px-4 py-3 text-gray-500">${c.income ? '₹' + Number(c.income).toLocaleString('en-IN') : '—'}</td>
+              <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${riskColor(c.risk_appetite)}">${c.risk_appetite || '—'}</span></td>
+              <td class="px-4 py-3 text-gray-500 max-w-xs truncate">${c.goals || '—'}</td>
+              <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">${c.status || 'lead'}</span></td>
+              <td class="px-4 py-3">
+                <button onclick="openAI('${c.id}')" class="text-purple-600 hover:underline text-xs mr-2">AI Tools</button>
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  function riskColor(r) {
+    return r === 'high' ? 'bg-red-100 text-red-700' : r === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700';
+  }
+
+  async function createClient(e) {
+    e.preventDefault();
+    if (!currentAdvisorId) { alert('Please select an advisor first.'); return; }
+    const form = e.target;
+    const raw = Object.fromEntries(new FormData(form));
+    const payload = { advisor_id: currentAdvisorId };
+    for (const [k, v] of Object.entries(raw)) {
+      if (v !== '') payload[k] = ['age','income','family_size','liabilities_emi'].includes(k) ? Number(v) : v;
+    }
+    const res = await fetch(`${API}/leads`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const msg = document.getElementById('clientMsg');
+    if (res.ok) {
+      msg.textContent = '✓ Client created!';
+      msg.className = 'text-sm self-center text-green-600';
+      form.reset();
+      setTimeout(() => showSection('clients'), 800);
+    } else {
+      const err = await res.json();
+      msg.textContent = '✗ ' + (err.detail || 'Error');
+      msg.className = 'text-sm self-center text-red-600';
+    }
+  }
+
+  async function populateClientDropdowns() {
+    if (!currentAdvisorId) return;
+    const res = await fetch(`${API}/leads?advisor_id=${currentAdvisorId}`);
+    const data = await res.json();
+    ['policyClientSelect','aiClientSelect'].forEach(id => {
+      const el = document.getElementById(id);
+      el.innerHTML = '<option value="">— select client —</option>';
+      data.forEach(c => el.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+    });
+  }
+
+  // ── Policies ─────────────────────────────────────────────────
+  async function createPolicy(e) {
+    e.preventDefault();
+    const form = e.target;
+    const raw = Object.fromEntries(new FormData(form));
+    const payload = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (v !== '') payload[k] = ['premium_amount','sum_assured'].includes(k) ? Number(v) : v;
+    }
+    const res = await fetch(`${API}/policies`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const msg = document.getElementById('policyMsg');
+    if (res.ok) {
+      msg.textContent = '✓ Policy added!';
+      msg.className = 'text-sm self-center text-green-600';
+      form.reset();
+    } else {
+      const err = await res.json();
+      msg.textContent = '✗ ' + (err.detail || 'Error');
+      msg.className = 'text-sm self-center text-red-600';
+    }
+  }
+
+  // ── Renewals ─────────────────────────────────────────────────
+  async function loadRenewals() {
+    if (!currentAdvisorId) { document.getElementById('renewalsTable').innerHTML = '<p class="text-gray-400 text-sm p-6">Select an advisor first.</p>'; return; }
+    const days = document.getElementById('renewalDays').value;
+    const res = await fetch(`${API}/renewals/upcoming?advisor_id=${currentAdvisorId}&days=${days}`);
+    const data = await res.json();
+    const el = document.getElementById('renewalsTable');
+    if (!data.length) { el.innerHTML = '<p class="text-gray-400 text-sm p-6">No renewals in this period.</p>'; return; }
+    el.innerHTML = `
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 border-b">
+          <tr>${['Client','Policy','Insurer','Premium','Due Date'].map(h => `<th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">${h}</th>`).join('')}</tr>
+        </thead>
+        <tbody>
+          ${data.map(r => `
+            <tr class="border-b hover:bg-gray-50">
+              <td class="px-4 py-3 font-medium text-gray-800">${r.client_name}</td>
+              <td class="px-4 py-3 text-gray-600">${r.product_name}<br><span class="text-xs text-gray-400">${r.policy_no}</span></td>
+              <td class="px-4 py-3 text-gray-500">${r.insurer_name}</td>
+              <td class="px-4 py-3 text-gray-800 font-medium">₹${Number(r.premium_amount).toLocaleString('en-IN')}</td>
+              <td class="px-4 py-3"><span class="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700">${r.next_due_date}</span></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  // ── AI Tools ─────────────────────────────────────────────────
+  function setAiClient(id) { currentAiClientId = id; }
+
+  function openAI(clientId) {
+    showSection('ai');
+    populateClientDropdowns().then(() => {
+      document.getElementById('aiClientSelect').value = clientId;
+      currentAiClientId = clientId;
+    });
+  }
+
+  function setLoading(btnEl, loading) {
+    btnEl.disabled = loading;
+    btnEl.innerHTML = loading ? '<span class="spinner"></span>' : btnEl.dataset.label;
+  }
+
+  async function analyzeClient() {
+    if (!currentAiClientId) { alert('Select a client first.'); return; }
+    const btn = event.target; btn.dataset.label = btn.textContent; setLoading(btn, true);
+    const res = await fetch(`${API}/analyze-client`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: currentAiClientId }) });
+    setLoading(btn, false);
+    const el = document.getElementById('analyzeOutput');
+    if (res.ok) {
+      const d = await res.json();
+      lastAnalysis = d.analysis;
+      document.getElementById('needAnalysisInput').value = d.analysis;
+      el.textContent = d.analysis;
+      el.classList.remove('hidden');
+    } else {
+      el.textContent = 'Error: ' + (await res.json()).detail;
+      el.classList.remove('hidden');
+    }
+  }
+
+  async function recommendProducts() {
+    if (!currentAiClientId) { alert('Select a client first.'); return; }
+    const analysis = document.getElementById('needAnalysisInput').value;
+    if (!analysis) { alert('Run need analysis first or paste it manually.'); return; }
+    const btn = event.target; btn.dataset.label = btn.textContent; setLoading(btn, true);
+    const res = await fetch(`${API}/recommend-products`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: currentAiClientId, need_analysis: analysis }) });
+    setLoading(btn, false);
+    const el = document.getElementById('recommendOutput');
+    if (res.ok) {
+      const d = await res.json();
+      el.innerHTML = d.recommendations.map(r => `
+        <div class="border rounded-lg p-4 bg-purple-50">
+          <div class="flex justify-between items-start">
+            <div>
+              <span class="text-xs font-bold text-purple-600 uppercase">#${r.rank} · ${r.type}</span>
+              <h4 class="font-semibold text-gray-800 mt-0.5">${r.product_name}</h4>
+              <p class="text-xs text-gray-500">${r.insurer}</p>
+            </div>
+            <span class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">${r.estimated_premium || '—'}</span>
+          </div>
+          <p class="text-sm text-gray-600 mt-2">${r.key_benefit}</p>
+          <p class="text-xs text-gray-500 mt-1 italic">${r.why_suits || ''}</p>
+        </div>`).join('');
+      el.classList.remove('hidden');
+    } else {
+      el.innerHTML = '<p class="text-red-500 text-sm">' + (await res.json()).detail + '</p>';
+      el.classList.remove('hidden');
+    }
+  }
+
+  async function generatePitch() {
+    if (!currentAiClientId) { alert('Select a client first.'); return; }
+    const btn = event.target; btn.dataset.label = btn.textContent; setLoading(btn, true);
+    const res = await fetch(`${API}/generate-pitch`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: currentAiClientId }) });
+    setLoading(btn, false);
+    const el = document.getElementById('pitchOutput');
+    if (res.ok) {
+      const d = await res.json();
+      el.textContent = d.pitch;
+      el.classList.remove('hidden');
+    } else {
+      el.textContent = 'Error: ' + (await res.json()).detail;
+      el.classList.remove('hidden');
+    }
+  }
+
+  async function handleObjection() {
+    if (!currentAiClientId) { alert('Select a client first.'); return; }
+    const objection = document.getElementById('objectionSelect').value;
+    const btn = event.target; btn.dataset.label = btn.textContent; setLoading(btn, true);
+    const res = await fetch(`${API}/handle-objection`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: currentAiClientId, objection }) });
+    setLoading(btn, false);
+    const el = document.getElementById('objectionOutput');
+    if (res.ok) {
+      const d = await res.json();
+      const r = d.response;
+      const fields = [
+        ['Acknowledge', r.acknowledge, 'blue'],
+        ['Reframe', r.reframe, 'purple'],
+        ['Strong Reason', r.strong_reason, 'indigo'],
+        ['Client-Specific Impact', r.client_specific_impact, 'violet'],
+        ['Stat / Fact', r.stat_or_fact, 'gray'],
+        ['Closing Line', r.closing_line, 'green'],
+      ];
+      el.innerHTML = fields.map(([label, val, color]) => `
+        <div class="border-l-4 border-${color}-400 bg-${color}-50 rounded-r-lg px-4 py-3">
+          <p class="text-xs font-bold text-${color}-600 uppercase mb-1">${label}</p>
+          <p class="text-sm text-gray-700">${val || '—'}</p>
+        </div>`).join('');
+      el.classList.remove('hidden');
+    } else {
+      el.innerHTML = '<p class="text-red-500 text-sm">' + (await res.json()).detail + '</p>';
+      el.classList.remove('hidden');
+    }
+  }
+
+  // ── Init ─────────────────────────────────────────────────────
+  loadAdvisors().then(() => showSection('advisors'));
+</script>
+</body>
+</html>

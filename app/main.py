@@ -1,10 +1,13 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.core.observability import init_observability
 from app.db.postgres import init_db
 from app.api.routes import clients, recommendations, emails, ingest, advisors, whatsapp, pitch, documents, metrics
 from fastapi.middleware.cors import CORSMiddleware
+import os
 
 # Import all models so Base.metadata knows every table before create_all runs.
 import app.models.advisor  # noqa: F401
@@ -46,7 +49,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -65,3 +68,9 @@ app.include_router(metrics.router)
 @app.get("/health")
 async def health():
     return {"status": "ok", "version": "1.0.0"}
+
+@app.get("/")
+async def root():
+    return FileResponse(os.path.join(os.path.dirname(__file__), "static", "index.html"))
+
+app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
