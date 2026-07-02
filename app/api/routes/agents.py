@@ -1,8 +1,5 @@
-import traceback
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import text
-from app.db.postgres import AsyncSessionLocal
 
 from app.agents.needs_analysis_agent import build_needs_analysis_agent
 from app.agents.product_matching_agent import build_product_matching_agent
@@ -37,35 +34,6 @@ class ResearchPolicyRequest(BaseModel):
 class RenewalsRequest(BaseModel):
     advisor_id: str
     days_ahead: int = 30
-
-
-# ── Debug: expose raw traceback so we can see what's failing ──────────────
-@router.post("/debug/interaction-insert")
-async def debug_interaction_insert(client_id: str):
-    try:
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(text("""
-                INSERT INTO interactions (id, client_id, interaction_type, notes, created_at)
-                VALUES (gen_random_uuid()::text, :client_id, 'debug_test', 'debug', now())
-                RETURNING id
-            """), {"client_id": client_id})
-            row = result.fetchone()
-            await db.commit()
-        return {"ok": True, "id": str(row.id)}
-    except Exception as e:
-        return {"ok": False, "error": str(e), "traceback": traceback.format_exc()}
-
-
-@router.post("/debug/client-lookup")
-async def debug_client_lookup(client_id: str):
-    try:
-        from sqlalchemy import select
-        from app.models.client import Client
-        async with AsyncSessionLocal() as db:
-            row = (await db.execute(select(Client).where(Client.id == client_id))).scalar_one_or_none()
-        return {"found": row is not None, "name": row.name if row else None}
-    except Exception as e:
-        return {"ok": False, "error": str(e), "traceback": traceback.format_exc()}
 
 
 # ── 1. Needs Analysis Agent ────────────────────────────────────────────────
