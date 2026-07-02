@@ -1,4 +1,5 @@
 import json
+from sqlalchemy.exc import DBAPIError
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import text
@@ -45,17 +46,23 @@ async def list_approvals(advisor_id: str, status: str = "pending"):
     return result
 
 
-@router.post("/{item_id}/approve")
-async def approve_item(item_id: str):
-    async with AsyncSessionLocal() as db:
-        row = (await db.execute(text("""
+async def _fetch_item(db, item_id: str):
+    try:
+        return (await db.execute(text("""
             SELECT aq.id, aq.client_id, aq.action_type, aq.payload, aq.status,
                    c.name AS client_name, c.email AS client_email
             FROM approval_queue aq
             LEFT JOIN clients c ON aq.client_id = c.id
             WHERE aq.id = :id
         """), {"id": item_id})).fetchone()
+    except DBAPIError:
+        return None
 
+
+@router.post("/{item_id}/approve")
+async def approve_item(item_id: str):
+    async with AsyncSessionLocal() as db:
+        row = await _fetch_item(db, item_id)
         if not row:
             raise HTTPException(status_code=404, detail="Item not found")
         if row.status != "pending":
@@ -77,13 +84,7 @@ async def approve_item(item_id: str):
             UPDATE approval_queue SET status = :status, reviewed_at = now() WHERE id = :id
         """), {"status": new_status, "id": item_id})
 
-        log = EmailLog(
-            client_id=row.client_id,
-            subject=subject,
-            body=body,
-            status=new_status,
-        )
-        db.add(log)
+        db.add(EmailLog(client_id=row.client_id, subject=subject, body=body, status=new_status))
         await db.commit()
 
     return {"status": new_status, "sent_to": to_email}
@@ -92,10 +93,7 @@ async def approve_item(item_id: str):
 @router.post("/{item_id}/reject")
 async def reject_item(item_id: str):
     async with AsyncSessionLocal() as db:
-        row = (await db.execute(
-            text("SELECT id, status FROM approval_queue WHERE id = :id"), {"id": item_id}
-        )).fetchone()
-
+        row = await _fetch_item(db, item_id)
         if not row:
             raise HTTPException(status_code=404, detail="Item not found")
         if row.status != "pending":
