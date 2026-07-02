@@ -7,6 +7,7 @@ from app.core.observability import init_observability
 from app.core.rag import sync_policies
 from app.db.postgres import init_db, AsyncSessionLocal
 from app.api.routes import clients, recommendations, emails, ingest, advisors, whatsapp, pitch, documents, metrics, agents
+from app.mcp.server import mcp
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
@@ -81,3 +82,4 @@ async def root():
     return FileResponse(os.path.join(os.path.dirname(__file__), "static", "index.html"))
 
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
+app.mount("/mcp", mcp.sse_app())
