@@ -40,6 +40,7 @@
   <button onclick="showSection('renewals')"     id="tab-renewals"     class="tab px-4 py-2 rounded-t text-sm font-medium text-gray-600 hover:bg-gray-100">Renewals</button>
   <button onclick="showSection('ai')"           id="tab-ai"           class="tab px-4 py-2 rounded-t text-sm font-medium text-gray-600 hover:bg-gray-100">AI Tools</button>
   <button onclick="showSection('advisors')"     id="tab-advisors"     class="tab px-4 py-2 rounded-t text-sm font-medium text-gray-600 hover:bg-gray-100">Advisors</button>
+  <button onclick="showSection('approvals')"   id="tab-approvals"   class="tab px-4 py-2 rounded-t text-sm font-medium text-gray-600 hover:bg-gray-100">Approvals <span id="approvalBadge" class="hidden ml-1 bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">0</span></button>
 </nav>
 
 <main class="max-w-5xl mx-auto px-4 py-6 space-y-4">
@@ -211,6 +212,24 @@
     </div>
   </section>
 
+  <!-- APPROVALS -->
+  <section id="sec-approvals" class="hidden">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-lg font-bold text-gray-800">Pending Approvals</h2>
+      <div class="flex items-center gap-3">
+        <select id="approvalStatusFilter" onchange="loadApprovals()" class="text-sm border border-gray-300 rounded-lg px-2 py-1 text-gray-600">
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </select>
+        <button onclick="loadApprovals()" class="text-sm text-blue-600 hover:underline">Refresh</button>
+      </div>
+    </div>
+    <div id="approvalsList">
+      <p class="text-gray-400 text-sm">Select an advisor to view approvals.</p>
+    </div>
+  </section>
+
   <!-- ADVISORS -->
   <section id="sec-advisors" class="hidden">
     <div class="grid grid-cols-2 gap-6">
@@ -262,6 +281,7 @@
     if (name === 'clients') loadClients();
     if (name === 'renewals') loadRenewals();
     if (name === 'advisors') loadAdvisors();
+    if (name === 'approvals') loadApprovals();
     if (name === 'policies' || name === 'ai') populateClientDropdowns();
   }
 
@@ -309,7 +329,7 @@
   function selectAdvisor(id) {
     currentAdvisorId = id;
     document.getElementById('advisorSelect').value = id;
-    if (id) { showSection('clients'); }
+    if (id) { refreshApprovalBadge(); showSection('clients'); }
   }
 
   // ── Clients ──────────────────────────────────────────────────
@@ -535,6 +555,108 @@
       el.innerHTML = '<p class="text-red-500 text-sm">' + (await res.json()).detail + '</p>';
       el.classList.remove('hidden');
     }
+  }
+
+  // ── Approvals ────────────────────────────────────────────────
+  async function loadApprovals() {
+    const el = document.getElementById('approvalsList');
+    if (!currentAdvisorId) { el.innerHTML = '<p class="text-gray-400 text-sm">Select an advisor first.</p>'; return; }
+    const status = document.getElementById('approvalStatusFilter').value;
+    el.innerHTML = '<p class="text-gray-400 text-sm">Loading...</p>';
+    const res = await fetch(`${API}/approval-queue?advisor_id=${currentAdvisorId}&status=${status}`);
+    const data = await res.json();
+    if (!data.length) {
+      el.innerHTML = `<p class="text-gray-400 text-sm">No ${status} approvals.</p>`;
+      if (status === 'pending') updateBadge(0);
+      return;
+    }
+    if (status === 'pending') updateBadge(data.length);
+    el.innerHTML = data.map(item => {
+      const isPending = item.status === 'pending';
+      const typeLabel = item.action_type === 'send_nurturing_email' ? 'Nurturing Email' : 'Renewal Reminder';
+      const riskBadge = item.lapse_risk_score != null
+        ? `<span class="ml-2 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Risk ${item.lapse_risk_score}%</span>` : '';
+      const gapsList = (item.gaps || []).slice(0,3).map(g =>
+        `<span class="inline-block bg-orange-50 text-orange-700 text-xs px-2 py-0.5 rounded mr-1 mb-1">${g.gap || g}</span>`
+      ).join('');
+      return `
+      <div id="card-${item.id}" class="bg-white rounded-xl shadow p-5 border-l-4 ${isPending ? 'border-amber-400' : item.status === 'approved' ? 'border-green-400' : 'border-gray-300'}">
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-semibold text-gray-800">${item.client_name}</span>
+              <span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">${typeLabel}</span>
+              ${riskBadge}
+            </div>
+            <p class="text-xs text-gray-400 mt-0.5">${item.client_email || 'No email'} · ${new Date(item.created_at).toLocaleString('en-IN')}</p>
+            ${gapsList ? `<div class="mt-2">${gapsList}</div>` : ''}
+            <div class="mt-3">
+              <p class="text-sm font-semibold text-gray-700">Subject: ${item.email_subject}</p>
+              <div id="body-${item.id}" class="hidden mt-2 text-sm text-gray-600 whitespace-pre-wrap bg-gray-50 rounded-lg p-3 border max-h-64 overflow-y-auto">${item.email_body}</div>
+              <button onclick="toggleBody('${item.id}')" class="mt-1 text-xs text-blue-600 hover:underline" id="toggle-${item.id}">Show email body ▾</button>
+            </div>
+          </div>
+          ${isPending ? `
+          <div class="flex flex-col gap-2 shrink-0">
+            <button onclick="approveItem('${item.id}')" id="approve-${item.id}" class="bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2 rounded-lg">Send ✓</button>
+            <button onclick="rejectItem('${item.id}')" id="reject-${item.id}" class="bg-red-100 hover:bg-red-200 text-red-700 text-sm font-semibold px-4 py-2 rounded-lg">Reject ✗</button>
+          </div>` : `<span class="text-sm font-semibold ${item.status === 'approved' ? 'text-green-600' : 'text-gray-400'} shrink-0">${item.status === 'approved' ? '✓ Sent' : '✗ Rejected'}</span>`}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function toggleBody(id) {
+    const el = document.getElementById('body-' + id);
+    const btn = document.getElementById('toggle-' + id);
+    const hidden = el.classList.toggle('hidden');
+    btn.textContent = hidden ? 'Show email body ▾' : 'Hide email body ▴';
+  }
+
+  async function approveItem(id) {
+    const btn = document.getElementById('approve-' + id);
+    btn.disabled = true; btn.textContent = '…';
+    const res = await fetch(`${API}/approval-queue/${id}/approve`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      const card = document.getElementById('card-' + id);
+      card.classList.remove('border-amber-400'); card.classList.add('border-green-400');
+      card.querySelector(`#approve-${id}`)?.parentElement?.remove();
+      const badge = card.querySelector('.text-sm.font-semibold');
+      if (!badge) card.querySelector('.flex.items-start').insertAdjacentHTML('beforeend',
+        '<span class="text-sm font-semibold text-green-600 shrink-0">✓ Sent</span>');
+      refreshApprovalBadge();
+    } else {
+      btn.disabled = false; btn.textContent = 'Send ✓';
+      alert('Error: ' + (data.detail || 'Failed to send'));
+    }
+  }
+
+  async function rejectItem(id) {
+    const btn = document.getElementById('reject-' + id);
+    btn.disabled = true; btn.textContent = '…';
+    const res = await fetch(`${API}/approval-queue/${id}/reject`, { method: 'POST' });
+    if (res.ok) {
+      document.getElementById('card-' + id)?.remove();
+      refreshApprovalBadge();
+    } else {
+      btn.disabled = false; btn.textContent = 'Reject ✗';
+      alert('Failed to reject');
+    }
+  }
+
+  async function refreshApprovalBadge() {
+    if (!currentAdvisorId) return;
+    const res = await fetch(`${API}/approval-queue?advisor_id=${currentAdvisorId}&status=pending`);
+    if (!res.ok) return;
+    const data = await res.json();
+    updateBadge(data.length);
+  }
+
+  function updateBadge(count) {
+    const badge = document.getElementById('approvalBadge');
+    if (count > 0) { badge.textContent = count; badge.classList.remove('hidden'); }
+    else { badge.classList.add('hidden'); }
   }
 
   // ── Init ─────────────────────────────────────────────────────
