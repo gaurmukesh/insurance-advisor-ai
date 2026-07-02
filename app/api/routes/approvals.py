@@ -1,5 +1,5 @@
 import json
-from sqlalchemy.exc import DBAPIError
+import uuid as uuid_mod
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import text
@@ -9,6 +9,13 @@ from app.api.routes.emails import send_email
 from app.models.email_log import EmailLog
 
 router = APIRouter(prefix="/api/v1/approval-queue", tags=["approvals"])
+
+
+def _require_uuid(item_id: str) -> None:
+    try:
+        uuid_mod.UUID(item_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Item not found")
 
 
 @router.get("")
@@ -47,20 +54,18 @@ async def list_approvals(advisor_id: str, status: str = "pending"):
 
 
 async def _fetch_item(db, item_id: str):
-    try:
-        return (await db.execute(text("""
-            SELECT aq.id, aq.client_id, aq.action_type, aq.payload, aq.status,
-                   c.name AS client_name, c.email AS client_email
-            FROM approval_queue aq
-            LEFT JOIN clients c ON aq.client_id = c.id
-            WHERE aq.id = :id
-        """), {"id": item_id})).fetchone()
-    except DBAPIError:
-        return None
+    return (await db.execute(text("""
+        SELECT aq.id, aq.client_id, aq.action_type, aq.payload, aq.status,
+               c.name AS client_name, c.email AS client_email
+        FROM approval_queue aq
+        LEFT JOIN clients c ON aq.client_id = c.id
+        WHERE aq.id = :id
+    """), {"id": item_id})).fetchone()
 
 
 @router.post("/{item_id}/approve")
 async def approve_item(item_id: str):
+    _require_uuid(item_id)
     async with AsyncSessionLocal() as db:
         row = await _fetch_item(db, item_id)
         if not row:
@@ -92,6 +97,7 @@ async def approve_item(item_id: str):
 
 @router.post("/{item_id}/reject")
 async def reject_item(item_id: str):
+    _require_uuid(item_id)
     async with AsyncSessionLocal() as db:
         row = await _fetch_item(db, item_id)
         if not row:
