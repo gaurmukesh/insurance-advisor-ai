@@ -82,6 +82,7 @@ jobs:
           PGPASSWORD=secret psql -h localhost -U admin -d insurance_ai_eval -f migrations/init.sql
           PGPASSWORD=secret psql -h localhost -U admin -d insurance_ai_eval -f migrations/agents.sql
           PGPASSWORD=secret psql -h localhost -U admin -d insurance_ai_eval -f migrations/governance.sql
+          PGPASSWORD=secret psql -h localhost -U admin -d insurance_ai_eval -f migrations/hnsw_index.sql
       - name: Run AI Evaluation Gate
         run: python tests/evals/run_evals.py
         env:
@@ -130,6 +131,21 @@ jobs:
     needs: build
     environment: staging
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Run production schema migrations
+        run: |
+          for f in migrations/init.sql migrations/agents.sql migrations/governance.sql \
+                   migrations/whatsapp_logs.sql migrations/email_logs_add_edited_body.sql \
+                   migrations/rls.sql migrations/hnsw_index.sql; do
+            echo "Applying $f"
+            psql "$MIGRATION_DB_URL" -v ON_ERROR_STOP=1 -f "$f"
+          done
+        env:
+          # PROD_SYNC_DATABASE_URL is a plain postgresql:// URI (libpq-compatible);
+          # PROD_DATABASE_URL is asyncpg-prefixed and won't work with psql.
+          MIGRATION_DB_URL: ${{ secrets.PROD_SYNC_DATABASE_URL }}
+
       - name: Deploy to Lightsail
         run: |
           aws lightsail create-container-service-deployment \
