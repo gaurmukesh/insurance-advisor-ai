@@ -5,7 +5,7 @@ from typing import TypedDict, Annotated
 from langgraph.graph import StateGraph, END
 
 from app.db.postgres import AsyncSessionLocal
-from app.db.vector_store import similarity_search
+from app.db.vector_store import similarity_search, parse_chunk_metadata
 from app.core.llm import chat
 
 
@@ -67,9 +67,13 @@ async def validate_answer(state: PolicyResearchState) -> dict:
     return {}
 
 
+def _source_name(chunk: dict) -> str:
+    return parse_chunk_metadata(chunk.get("metadata", "")).get("source") or "policy document"
+
+
 async def synthesize_with_citations(state: PolicyResearchState) -> dict:
     context = "\n\n".join(
-        f"[Source {i+1}: {r.get('metadata', 'policy document')}]\n{r['content']}"
+        f"[Source {i+1}: {_source_name(r)}]\n{r['content']}"
         for i, r in enumerate(state["search_results"][:8])
     )
     prompt = f"""Answer this insurance question using only the provided policy excerpts.
@@ -84,7 +88,7 @@ Policy Excerpts:
         prompt, trace_name="synthesize_answer"
     )
     citations = [
-        f"Source {i+1}: {r.get('metadata', 'policy document')}"
+        f"Source {i+1}: {_source_name(r)}"
         for i, r in enumerate(state["search_results"][:8])
     ]
     return {"answer": answer, "citations": citations}

@@ -4,7 +4,7 @@ from pypdf import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.vector_store import insert_chunk, similarity_search
+from app.db.vector_store import insert_chunk, similarity_search, parse_chunk_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -46,12 +46,11 @@ async def sync_policies(db: AsyncSession) -> int:
         return 0
 
     result = await db.execute(text("SELECT DISTINCT metadata FROM policy_chunks"))
-    ingested_sources = {row[0] for row in result.fetchall()}
+    ingested_sources = {parse_chunk_metadata(row[0]).get("source") for row in result.fetchall()}
 
     total = 0
     for pdf_file in sorted(policies_dir.glob("*.pdf")):
-        source_tag = f"'source': '{pdf_file.name}'"
-        if any(source_tag in s for s in ingested_sources):
+        if pdf_file.name in ingested_sources:
             logger.info(f"RAG sync: already ingested {pdf_file.name}, skipping")
             continue
         logger.info(f"RAG sync: ingesting {pdf_file.name} ...")

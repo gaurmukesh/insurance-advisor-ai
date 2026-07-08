@@ -1,3 +1,4 @@
+import ast
 import json
 
 from sqlalchemy import text
@@ -60,6 +61,22 @@ async def insert_chunk(db: AsyncSession, content: str, metadata: dict):
             INSERT INTO policy_chunks (content, metadata, embedding)
             VALUES (:content, :metadata, CAST(:embedding AS vector))
         """),
-        {"content": content, "metadata": str(metadata), "embedding": embedding_str},
+        {"content": content, "metadata": json.dumps(metadata), "embedding": embedding_str},
     )
     await db.commit()
+
+
+def parse_chunk_metadata(raw: str) -> dict:
+    """policy_chunks.metadata is stored as JSON going forward, but rows written
+    before this fix used Python's str(dict) repr (single-quoted, not valid
+    JSON) — fall back to literal_eval so old rows still parse instead of
+    silently failing dedup/citation lookups until they're re-ingested."""
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        try:
+            return ast.literal_eval(raw)
+        except (ValueError, SyntaxError):
+            return {}

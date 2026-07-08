@@ -50,12 +50,13 @@ async def main():
 
     try:
         async with AsyncSessionLocal() as db:
-            # metadata is stored as a Python dict repr (see insert_chunk), not
-            # valid JSON — extract the source filename with a regex instead of
-            # a ::json cast, which would fail on the single-quoted format.
+            # metadata is stored as JSON (see insert_chunk) — rows written before
+            # that fix used a Python dict repr instead, so this cast can still
+            # fail on old, not-yet-reingested rows; the try/except keeps this
+            # summary purely informational either way.
             result = await db.execute(text(
-                "SELECT substring(metadata from '''source'': ''([^'']*)''') as source_file, "
-                "COUNT(*) as chunks FROM policy_chunks GROUP BY source_file ORDER BY source_file"
+                "SELECT metadata::json->>'source' as source_file, COUNT(*) as chunks "
+                "FROM policy_chunks GROUP BY source_file ORDER BY source_file"
             ))
             rows = result.fetchall()
             print("\nChunks per document:")
