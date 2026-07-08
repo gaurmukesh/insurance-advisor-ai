@@ -14,6 +14,40 @@
 </head>
 <body class="bg-gray-100 min-h-screen font-sans">
 
+<!-- LOGIN -->
+<div id="loginScreen" class="min-h-screen flex items-center justify-center">
+  <div class="bg-white rounded-xl shadow p-8 w-full max-w-sm">
+    <div class="flex items-center gap-2 mb-6">
+      <span class="text-2xl">🛡️</span>
+      <h1 class="text-lg font-bold text-gray-800">Insurance Advisor AI</h1>
+    </div>
+    <div class="flex gap-1 mb-4 text-sm border-b">
+      <button onclick="setAuthMode('login')" id="authTab-login" class="px-3 py-2 border-b-2 border-blue-600 text-blue-600 font-medium">Sign In</button>
+      <button onclick="setAuthMode('register')" id="authTab-register" class="px-3 py-2 border-b-2 border-transparent text-gray-500 font-medium">Register</button>
+    </div>
+
+    <form id="loginForm" onsubmit="login(event)" class="space-y-3">
+      <div><label class="label">Email</label><input name="email" type="email" required class="input" /></div>
+      <div><label class="label">Password</label><input name="password" type="password" required class="input" /></div>
+      <button type="submit" class="btn-primary w-full">Sign In</button>
+      <p id="loginMsg" class="text-sm text-red-600"></p>
+    </form>
+
+    <form id="registerForm" onsubmit="registerAdvisor(event)" class="space-y-3 hidden">
+      <div><label class="label">Full Name *</label><input name="name" required class="input" /></div>
+      <div><label class="label">Email *</label><input name="email" type="email" required class="input" /></div>
+      <div><label class="label">Phone *</label><input name="phone" required class="input" /></div>
+      <div><label class="label">Password *</label><input name="password" type="password" required class="input" /></div>
+      <div><label class="label">License No</label><input name="license_no" class="input" /></div>
+      <button type="submit" class="btn-primary w-full">Create Account</button>
+      <p id="registerMsg" class="text-sm text-red-600"></p>
+    </form>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden">
+
 <!-- Header -->
 <header class="bg-blue-700 text-white px-6 py-4 flex items-center justify-between shadow-md">
   <div class="flex items-center gap-3">
@@ -23,12 +57,9 @@
       <p class="text-blue-200 text-xs">AI-powered advisor platform</p>
     </div>
   </div>
-  <div class="flex items-center gap-2">
-    <label class="text-sm text-blue-200">Advisor:</label>
-    <select id="advisorSelect" onchange="selectAdvisor(this.value)" class="text-sm bg-blue-800 border border-blue-500 rounded px-2 py-1 text-white">
-      <option value="">— select —</option>
-    </select>
-    <button onclick="showSection('advisors')" class="text-xs bg-blue-500 hover:bg-blue-400 px-2 py-1 rounded">+ New</button>
+  <div class="flex items-center gap-3">
+    <span id="currentAdvisorName" class="text-sm text-blue-100"></span>
+    <button onclick="logout()" class="text-xs bg-blue-500 hover:bg-blue-400 px-2 py-1 rounded">Logout</button>
   </div>
 </header>
 
@@ -39,7 +70,6 @@
   <button onclick="showSection('policies')"     id="tab-policies"     class="tab px-4 py-2 rounded-t text-sm font-medium text-gray-600 hover:bg-gray-100">Policies</button>
   <button onclick="showSection('renewals')"     id="tab-renewals"     class="tab px-4 py-2 rounded-t text-sm font-medium text-gray-600 hover:bg-gray-100">Renewals</button>
   <button onclick="showSection('ai')"           id="tab-ai"           class="tab px-4 py-2 rounded-t text-sm font-medium text-gray-600 hover:bg-gray-100">AI Tools</button>
-  <button onclick="showSection('advisors')"     id="tab-advisors"     class="tab px-4 py-2 rounded-t text-sm font-medium text-gray-600 hover:bg-gray-100">Advisors</button>
   <button onclick="showSection('approvals')"   id="tab-approvals"   class="tab px-4 py-2 rounded-t text-sm font-medium text-gray-600 hover:bg-gray-100">Approvals <span id="approvalBadge" class="hidden ml-1 bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">0</span></button>
 </nav>
 
@@ -230,30 +260,10 @@
     </div>
   </section>
 
-  <!-- ADVISORS -->
-  <section id="sec-advisors" class="hidden">
-    <div class="grid grid-cols-2 gap-6">
-      <div class="bg-white rounded-xl shadow p-6">
-        <h2 class="text-lg font-bold text-gray-800 mb-4">Create Advisor</h2>
-        <form onsubmit="createAdvisor(event)" class="space-y-3">
-          <div><label class="label">Full Name *</label><input name="name" required class="input" placeholder="Ravi Kumar" /></div>
-          <div><label class="label">Email *</label><input name="email" type="email" required class="input" placeholder="ravi@example.com" /></div>
-          <div><label class="label">Phone *</label><input name="phone" required class="input" placeholder="9876543210" /></div>
-          <div><label class="label">License No</label><input name="license_no" class="input" placeholder="IRDAI-12345" /></div>
-          <div class="flex gap-3">
-            <button type="submit" class="btn-primary">Create</button>
-            <span id="advisorMsg" class="text-sm self-center"></span>
-          </div>
-        </form>
-      </div>
-      <div class="bg-white rounded-xl shadow p-6">
-        <h2 class="text-lg font-bold text-gray-800 mb-4">Advisors</h2>
-        <div id="advisorsList" class="space-y-2 text-sm text-gray-500">Loading...</div>
-      </div>
-    </div>
-  </section>
 
 </main>
+
+</div><!-- /#app -->
 
 <style>
   .label { display: block; font-size: 0.75rem; font-weight: 600; color: #6b7280; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
@@ -267,9 +277,91 @@
 
 <script>
   const API = '/api/v1';
-  let currentAdvisorId = null;
+  const TOKEN_KEY = 'access_token';
   let currentAiClientId = null;
   let lastAnalysis = '';
+
+  // ── Auth ─────────────────────────────────────────────────────
+  function getToken() { return localStorage.getItem(TOKEN_KEY); }
+  function setToken(t) { localStorage.setItem(TOKEN_KEY, t); }
+  function clearToken() { localStorage.removeItem(TOKEN_KEY); }
+
+  async function authFetch(url, options = {}) {
+    const headers = { ...(options.headers || {}), Authorization: `Bearer ${getToken()}` };
+    const res = await fetch(url, { ...options, headers });
+    if (res.status === 401) { clearToken(); showLogin(); throw new Error('Not authenticated'); }
+    return res;
+  }
+
+  function setAuthMode(mode) {
+    document.getElementById('loginForm').classList.toggle('hidden', mode !== 'login');
+    document.getElementById('registerForm').classList.toggle('hidden', mode !== 'register');
+    document.getElementById('authTab-login').classList.toggle('border-blue-600', mode === 'login');
+    document.getElementById('authTab-login').classList.toggle('text-blue-600', mode === 'login');
+    document.getElementById('authTab-login').classList.toggle('text-gray-500', mode !== 'login');
+    document.getElementById('authTab-register').classList.toggle('border-blue-600', mode === 'register');
+    document.getElementById('authTab-register').classList.toggle('text-blue-600', mode === 'register');
+    document.getElementById('authTab-register').classList.toggle('text-gray-500', mode !== 'register');
+  }
+
+  function showLogin() {
+    document.getElementById('app').classList.add('hidden');
+    document.getElementById('loginScreen').classList.remove('hidden');
+  }
+
+  async function showApp(advisor) {
+    document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    document.getElementById('currentAdvisorName').textContent = advisor.name;
+    showSection('clients');
+    refreshApprovalBadge();
+  }
+
+  async function login(e) {
+    e.preventDefault();
+    const payload = Object.fromEntries(new FormData(e.target));
+    const msg = document.getElementById('loginMsg');
+    msg.textContent = '';
+    const res = await fetch(`${API}/auth/login`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    if (res.ok) {
+      const data = await res.json();
+      setToken(data.access_token);
+      showApp(data.advisor);
+    } else {
+      msg.textContent = 'Invalid email or password.';
+    }
+  }
+
+  async function registerAdvisor(e) {
+    e.preventDefault();
+    const form = e.target;
+    const payload = Object.fromEntries(new FormData(form));
+    const msg = document.getElementById('registerMsg');
+    msg.textContent = '';
+    const res = await fetch(`${API}/advisors`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    if (res.ok) {
+      const loginRes = await fetch(`${API}/auth/login`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ email: payload.email, password: payload.password }) });
+      const data = await loginRes.json();
+      setToken(data.access_token);
+      showApp(data.advisor);
+    } else {
+      const err = await res.json();
+      msg.textContent = err.detail || 'Registration failed.';
+    }
+  }
+
+  function logout() {
+    clearToken();
+    showLogin();
+  }
+
+  async function initAuth() {
+    if (!getToken()) { showLogin(); return; }
+    try {
+      const res = await authFetch(`${API}/auth/me`);
+      if (res.ok) { showApp(await res.json()); }
+    } catch { /* authFetch already redirected to login */ }
+  }
 
   // ── Section routing ──────────────────────────────────────────
   function showSection(name) {
@@ -280,62 +372,13 @@
     if (tab) tab.classList.add('bg-blue-600', 'text-white');
     if (name === 'clients') loadClients();
     if (name === 'renewals') loadRenewals();
-    if (name === 'advisors') loadAdvisors();
     if (name === 'approvals') loadApprovals();
     if (name === 'policies' || name === 'ai') populateClientDropdowns();
   }
 
-  // ── Advisors ─────────────────────────────────────────────────
-  async function loadAdvisors() {
-    const res = await fetch(`${API}/advisors`);
-    const data = await res.json();
-    const select = document.getElementById('advisorSelect');
-    select.innerHTML = '<option value="">— select —</option>';
-    const list = document.getElementById('advisorsList');
-    list.innerHTML = '';
-    data.forEach(a => {
-      select.innerHTML += `<option value="${a.id}">${a.name}</option>`;
-      list.innerHTML += `
-        <div class="flex items-center justify-between border rounded-lg p-3">
-          <div>
-            <p class="font-semibold text-gray-800">${a.name}</p>
-            <p class="text-gray-400">${a.email} · ${a.phone}</p>
-          </div>
-          <button onclick="selectAdvisor('${a.id}')" class="text-xs text-blue-600 hover:underline">Select</button>
-        </div>`;
-    });
-    if (!data.length) list.innerHTML = '<p class="text-gray-400">No advisors yet.</p>';
-  }
-
-  async function createAdvisor(e) {
-    e.preventDefault();
-    const form = e.target;
-    const payload = Object.fromEntries(new FormData(form));
-    const res = await fetch(`${API}/advisors`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-    const msg = document.getElementById('advisorMsg');
-    if (res.ok) {
-      const a = await res.json();
-      msg.textContent = '✓ Created!';
-      msg.className = 'text-sm self-center text-green-600';
-      form.reset();
-      loadAdvisors();
-    } else {
-      const err = await res.json();
-      msg.textContent = '✗ ' + (err.detail || 'Error');
-      msg.className = 'text-sm self-center text-red-600';
-    }
-  }
-
-  function selectAdvisor(id) {
-    currentAdvisorId = id;
-    document.getElementById('advisorSelect').value = id;
-    if (id) { refreshApprovalBadge(); showSection('clients'); }
-  }
-
   // ── Clients ──────────────────────────────────────────────────
   async function loadClients() {
-    if (!currentAdvisorId) { document.getElementById('clientsTable').innerHTML = '<p class="text-gray-400 text-sm p-6">Select an advisor first.</p>'; return; }
-    const res = await fetch(`${API}/leads?advisor_id=${currentAdvisorId}`);
+    const res = await authFetch(`${API}/leads`);
     const data = await res.json();
     const el = document.getElementById('clientsTable');
     if (!data.length) { el.innerHTML = '<p class="text-gray-400 text-sm p-6">No clients yet. Add one.</p>'; return; }
@@ -367,14 +410,13 @@
 
   async function createClient(e) {
     e.preventDefault();
-    if (!currentAdvisorId) { alert('Please select an advisor first.'); return; }
     const form = e.target;
     const raw = Object.fromEntries(new FormData(form));
-    const payload = { advisor_id: currentAdvisorId };
+    const payload = {};
     for (const [k, v] of Object.entries(raw)) {
       if (v !== '') payload[k] = ['age','income','family_size','liabilities_emi'].includes(k) ? Number(v) : v;
     }
-    const res = await fetch(`${API}/leads`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const res = await authFetch(`${API}/leads`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     const msg = document.getElementById('clientMsg');
     if (res.ok) {
       msg.textContent = '✓ Client created!';
@@ -389,8 +431,7 @@
   }
 
   async function populateClientDropdowns() {
-    if (!currentAdvisorId) return;
-    const res = await fetch(`${API}/leads?advisor_id=${currentAdvisorId}`);
+    const res = await authFetch(`${API}/leads`);
     const data = await res.json();
     ['policyClientSelect','aiClientSelect'].forEach(id => {
       const el = document.getElementById(id);
@@ -408,7 +449,7 @@
     for (const [k, v] of Object.entries(raw)) {
       if (v !== '') payload[k] = ['premium_amount','sum_assured'].includes(k) ? Number(v) : v;
     }
-    const res = await fetch(`${API}/policies`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const res = await authFetch(`${API}/policies`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     const msg = document.getElementById('policyMsg');
     if (res.ok) {
       msg.textContent = '✓ Policy added!';
@@ -423,9 +464,8 @@
 
   // ── Renewals ─────────────────────────────────────────────────
   async function loadRenewals() {
-    if (!currentAdvisorId) { document.getElementById('renewalsTable').innerHTML = '<p class="text-gray-400 text-sm p-6">Select an advisor first.</p>'; return; }
     const days = document.getElementById('renewalDays').value;
-    const res = await fetch(`${API}/renewals/upcoming?advisor_id=${currentAdvisorId}&days=${days}`);
+    const res = await authFetch(`${API}/renewals/upcoming?days=${days}`);
     const data = await res.json();
     const el = document.getElementById('renewalsTable');
     if (!data.length) { el.innerHTML = '<p class="text-gray-400 text-sm p-6">No renewals in this period.</p>'; return; }
@@ -466,7 +506,7 @@
   async function analyzeClient() {
     if (!currentAiClientId) { alert('Select a client first.'); return; }
     const btn = event.target; btn.dataset.label = btn.textContent; setLoading(btn, true);
-    const res = await fetch(`${API}/analyze-client`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: currentAiClientId }) });
+    const res = await authFetch(`${API}/analyze-client`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: currentAiClientId }) });
     setLoading(btn, false);
     const el = document.getElementById('analyzeOutput');
     if (res.ok) {
@@ -486,7 +526,7 @@
     const analysis = document.getElementById('needAnalysisInput').value;
     if (!analysis) { alert('Run need analysis first or paste it manually.'); return; }
     const btn = event.target; btn.dataset.label = btn.textContent; setLoading(btn, true);
-    const res = await fetch(`${API}/recommend-products`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: currentAiClientId, need_analysis: analysis }) });
+    const res = await authFetch(`${API}/recommend-products`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: currentAiClientId, need_analysis: analysis }) });
     setLoading(btn, false);
     const el = document.getElementById('recommendOutput');
     if (res.ok) {
@@ -514,7 +554,7 @@
   async function generatePitch() {
     if (!currentAiClientId) { alert('Select a client first.'); return; }
     const btn = event.target; btn.dataset.label = btn.textContent; setLoading(btn, true);
-    const res = await fetch(`${API}/generate-pitch`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: currentAiClientId }) });
+    const res = await authFetch(`${API}/generate-pitch`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: currentAiClientId }) });
     setLoading(btn, false);
     const el = document.getElementById('pitchOutput');
     if (res.ok) {
@@ -531,7 +571,7 @@
     if (!currentAiClientId) { alert('Select a client first.'); return; }
     const objection = document.getElementById('objectionSelect').value;
     const btn = event.target; btn.dataset.label = btn.textContent; setLoading(btn, true);
-    const res = await fetch(`${API}/handle-objection`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: currentAiClientId, objection }) });
+    const res = await authFetch(`${API}/handle-objection`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: currentAiClientId, objection }) });
     setLoading(btn, false);
     const el = document.getElementById('objectionOutput');
     if (res.ok) {
@@ -560,10 +600,9 @@
   // ── Approvals ────────────────────────────────────────────────
   async function loadApprovals() {
     const el = document.getElementById('approvalsList');
-    if (!currentAdvisorId) { el.innerHTML = '<p class="text-gray-400 text-sm">Select an advisor first.</p>'; return; }
     const status = document.getElementById('approvalStatusFilter').value;
     el.innerHTML = '<p class="text-gray-400 text-sm">Loading...</p>';
-    const res = await fetch(`${API}/approval-queue?advisor_id=${currentAdvisorId}&status=${status}`);
+    const res = await authFetch(`${API}/approval-queue?status=${status}`);
     const data = await res.json();
     if (!data.length) {
       el.innerHTML = `<p class="text-gray-400 text-sm">No ${status} approvals.</p>`;
@@ -616,7 +655,7 @@
   async function approveItem(id) {
     const btn = document.getElementById('approve-' + id);
     btn.disabled = true; btn.textContent = '…';
-    const res = await fetch(`${API}/approval-queue/${id}/approve`, { method: 'POST' });
+    const res = await authFetch(`${API}/approval-queue/${id}/approve`, { method: 'POST' });
     const data = await res.json();
     if (res.ok) {
       const card = document.getElementById('card-' + id);
@@ -635,7 +674,7 @@
   async function rejectItem(id) {
     const btn = document.getElementById('reject-' + id);
     btn.disabled = true; btn.textContent = '…';
-    const res = await fetch(`${API}/approval-queue/${id}/reject`, { method: 'POST' });
+    const res = await authFetch(`${API}/approval-queue/${id}/reject`, { method: 'POST' });
     if (res.ok) {
       document.getElementById('card-' + id)?.remove();
       refreshApprovalBadge();
@@ -646,8 +685,7 @@
   }
 
   async function refreshApprovalBadge() {
-    if (!currentAdvisorId) return;
-    const res = await fetch(`${API}/approval-queue?advisor_id=${currentAdvisorId}&status=pending`);
+    const res = await authFetch(`${API}/approval-queue?status=pending`);
     if (!res.ok) return;
     const data = await res.json();
     updateBadge(data.length);
@@ -660,7 +698,7 @@
   }
 
   // ── Init ─────────────────────────────────────────────────────
-  loadAdvisors().then(() => showSection('advisors'));
+  initAuth();
 </script>
 </body>
 </html>
