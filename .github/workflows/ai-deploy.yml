@@ -83,7 +83,20 @@ jobs:
           PGPASSWORD=secret psql -h localhost -U admin -d insurance_ai_eval -f migrations/agents.sql
           PGPASSWORD=secret psql -h localhost -U admin -d insurance_ai_eval -f migrations/governance.sql
           PGPASSWORD=secret psql -h localhost -U admin -d insurance_ai_eval -f migrations/hnsw_index.sql
-          PGPASSWORD=secret psql -h localhost -U admin -d insurance_ai_eval -f migrations/auth.sql
+          # auth.sql intentionally excluded: this DB never gets the ORM-managed
+          # tables (advisors, clients, ...) that init_db() creates at app boot,
+          # so `ALTER TABLE advisors` has nothing to alter here. It's only
+          # needed against prod (deploy-staging below), where those tables
+          # already exist from previous deployments.
+      - name: Ingest policy documents
+        # The Policy Research agent (and its RAGAS eval) need real chunks in
+        # policy_chunks — this DB is freshly migrated and otherwise empty.
+        run: python scripts/reingest_policies.py
+        env:
+          PYTHONPATH: .
+          DATABASE_URL: postgresql+asyncpg://admin:secret@localhost:5432/insurance_ai_eval
+          SYNC_DATABASE_URL: postgresql://admin:secret@localhost:5432/insurance_ai_eval
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       - name: Run AI Evaluation Gate
         run: python tests/evals/run_evals.py
         env:

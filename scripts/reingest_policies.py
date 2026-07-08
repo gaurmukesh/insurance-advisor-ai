@@ -48,12 +48,22 @@ async def main():
 
     print(f"\nDone. Total chunks ingested: {total}")
 
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(text("SELECT source_file, COUNT(*) as chunks FROM (SELECT metadata::json->>'source' as source_file FROM policy_chunks) sub GROUP BY source_file ORDER BY source_file"))
-        rows = result.fetchall()
-        print("\nChunks per document:")
-        for row in rows:
-            print(f"  {row.source_file}: {row.chunks} chunks")
+    try:
+        async with AsyncSessionLocal() as db:
+            # metadata is stored as a Python dict repr (see insert_chunk), not
+            # valid JSON — extract the source filename with a regex instead of
+            # a ::json cast, which would fail on the single-quoted format.
+            result = await db.execute(text(
+                "SELECT substring(metadata from '''source'': ''([^'']*)''') as source_file, "
+                "COUNT(*) as chunks FROM policy_chunks GROUP BY source_file ORDER BY source_file"
+            ))
+            rows = result.fetchall()
+            print("\nChunks per document:")
+            for row in rows:
+                print(f"  {row.source_file}: {row.chunks} chunks")
+    except Exception as e:
+        # Purely informational summary — never fail the run over it.
+        print(f"\n(could not print per-document summary: {e})")
 
 
 asyncio.run(main())
