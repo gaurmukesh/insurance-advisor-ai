@@ -15,6 +15,14 @@ from app.modules.product_recommender import recommend_products
 from app.modules.email_generator import generate_premium_reminder_email
 from app.modules.pitch_handler import generate_pitch, handle_objection
 from app.db.postgres import AsyncSessionLocal
+from app.agents.policy_research_agent import build_policy_research_agent
+
+import tests.evals.ragas_compat  # noqa: F401 — must precede any `ragas` import
+
+# RAGAS score thresholds — generous on purpose: this is a sanity gate against a
+# handful of golden questions, not a tight quality bar tuned on a large eval set.
+RAGAS_FAITHFULNESS_MIN = 0.7
+RAGAS_ANSWER_RELEVANCY_MIN = 0.7
 
 
 async def run_need_analyzer_evals() -> bool:
@@ -206,6 +214,67 @@ async def run_pitch_handler_evals() -> bool:
     return failed == 0
 
 
+async def run_ragas_evals() -> bool:
+    from ragas import evaluate
+    from ragas.dataset_schema import EvaluationDataset, SingleTurnSample
+    from ragas.embeddings import LangchainEmbeddingsWrapper
+    from ragas.llms import LangchainLLMWrapper
+    from ragas.metrics import Faithfulness, ResponseRelevancy
+    from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+    from app.core.config import settings
+
+    golden = Path("tests/evals/golden/policy_research.jsonl")
+    agent = build_policy_research_agent()
+
+    samples = []
+    for line in golden.read_text().strip().splitlines():
+        case = json.loads(line)
+        result = await agent.ainvoke({
+            "question": case["question"],
+            "advisor_id": "ragas-eval",
+            "search_plan": [], "search_results": [],
+            "searches_done": 0, "is_sufficient": False,
+            "answer": "", "citations": [], "errors": [],
+        })
+        if result.get("errors"):
+            print(f"  FAIL [{case['question']}] agent error: {result['errors'][0]}")
+            return False
+
+        samples.append(SingleTurnSample(
+            user_input=case["question"],
+            response=result["answer"],
+            retrieved_contexts=[r["content"] for r in result["search_results"][:8]] or [""],
+        ))
+
+    judge_llm = LangchainLLMWrapper(ChatOpenAI(model="gpt-4o-mini", api_key=settings.OPENAI_API_KEY))
+    judge_embeddings = LangchainEmbeddingsWrapper(OpenAIEmbeddings(api_key=settings.OPENAI_API_KEY))
+
+    result = evaluate(
+        dataset=EvaluationDataset(samples=samples),
+        metrics=[Faithfulness(), ResponseRelevancy()],
+        llm=judge_llm,
+        embeddings=judge_embeddings,
+        show_progress=False,
+    )
+    df = result.to_pandas()
+
+    faithfulness_mean = df["faithfulness"].mean()
+    relevancy_mean = df["answer_relevancy"].mean()
+
+    ok = True
+    print(f"  Faithfulness:     {faithfulness_mean:.2f} (min {RAGAS_FAITHFULNESS_MIN})")
+    print(f"  Answer Relevancy: {relevancy_mean:.2f} (min {RAGAS_ANSWER_RELEVANCY_MIN})")
+    if faithfulness_mean < RAGAS_FAITHFULNESS_MIN:
+        print("  FAIL: faithfulness below threshold")
+        ok = False
+    if relevancy_mean < RAGAS_ANSWER_RELEVANCY_MIN:
+        print("  FAIL: answer relevancy below threshold")
+        ok = False
+
+    print(f"\nRAGAS Evals: {'passed' if ok else 'failed'}")
+    return ok
+
+
 async def main():
     print("=== Running AI Evaluation Gate ===\n")
     results = [
@@ -213,6 +282,7 @@ async def main():
         await run_product_recommender_evals(),
         await run_email_generator_evals(),
         await run_pitch_handler_evals(),
+        await run_ragas_evals(),
     ]
     all_pass = all(results)
     print("\n" + ("ALL EVALS PASSED" if all_pass else "EVAL GATE FAILED — blocking deployment"))

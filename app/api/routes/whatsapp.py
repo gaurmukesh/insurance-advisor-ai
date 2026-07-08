@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
+from app.api.deps import get_current_advisor
 from app.db.postgres import get_db
+from app.models.advisor import Advisor
 from app.models.client import Client
 from app.models.policy import Policy
 from app.models.whatsapp_log import WhatsAppLog
@@ -14,7 +16,7 @@ router = APIRouter(prefix="/api/v1", tags=["whatsapp"])
 logger = logging.getLogger(__name__)
 
 
-# ── Meta webhook verification ──────────────────────────────────────────────────
+# ── Meta webhook verification (public — called by Meta's servers, not the dashboard) ──
 
 @router.get("/whatsapp/webhook")
 async def verify_webhook(
@@ -82,9 +84,16 @@ async def receive_webhook(request: Request, db: AsyncSession = Depends(get_db)):
 # ── WhatsApp logs ──────────────────────────────────────────────────────────────
 
 @router.get("/whatsapp-logs")
-async def get_whatsapp_logs(db: AsyncSession = Depends(get_db)):
+async def get_whatsapp_logs(
+    db: AsyncSession = Depends(get_db),
+    current: Advisor = Depends(get_current_advisor),
+):
     result = await db.execute(
-        select(WhatsAppLog).order_by(WhatsAppLog.sent_at.desc()).limit(100)
+        select(WhatsAppLog)
+        .join(Client, WhatsAppLog.client_id == Client.id)
+        .where(Client.advisor_id == current.id)
+        .order_by(WhatsAppLog.sent_at.desc())
+        .limit(100)
     )
     return result.scalars().all()
 
@@ -97,7 +106,9 @@ class WhatsAppReminderRequest(BaseModel):
 
 @router.post("/send-whatsapp/reminder")
 async def send_whatsapp_reminder_manual(
-    data: WhatsAppReminderRequest, db: AsyncSession = Depends(get_db)
+    data: WhatsAppReminderRequest,
+    db: AsyncSession = Depends(get_db),
+    current: Advisor = Depends(get_current_advisor),
 ):
     result = await db.execute(
         select(Policy, Client)
@@ -105,7 +116,7 @@ async def send_whatsapp_reminder_manual(
         .where(Policy.id == data.policy_id)
     )
     row = result.one_or_none()
-    if not row:
+    if not row or row[1].advisor_id != current.id:
         raise HTTPException(status_code=404, detail="Policy not found")
 
     policy, client = row

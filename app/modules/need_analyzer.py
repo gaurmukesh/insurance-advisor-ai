@@ -1,5 +1,7 @@
+from typing import AsyncIterator
+
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.llm import chat
+from app.core.llm import chat, chat_stream
 from app.core.rag import retrieve_context
 from app.core.prompt_registry import get_prompt
 
@@ -11,7 +13,7 @@ If the client has any health conditions (e.g. diabetes, hypertension), explicitl
 Format your response clearly with sections."""
 
 
-async def analyze_client_needs(db: AsyncSession, client_profile: dict) -> str:
+async def _build_prompt(db: AsyncSession, client_profile: dict) -> tuple[str, str]:
     context = await retrieve_context(db, f"insurance for {client_profile.get('goals', 'general')}")
 
     disposable = (client_profile.get('income') or 0) / 12 - (client_profile.get('liabilities_emi') or 0)
@@ -45,4 +47,15 @@ Provide:
 """
 
     system = await get_prompt("need_analyzer_system") or SYSTEM_PROMPT
+    return system, user_message
+
+
+async def analyze_client_needs(db: AsyncSession, client_profile: dict) -> str:
+    system, user_message = await _build_prompt(db, client_profile)
     return await chat(system, user_message, trace_name="need_analyzer")
+
+
+async def analyze_client_needs_stream(db: AsyncSession, client_profile: dict) -> AsyncIterator[str]:
+    system, user_message = await _build_prompt(db, client_profile)
+    async for chunk in chat_stream(system, user_message, trace_name="need_analyzer_stream"):
+        yield chunk

@@ -1,5 +1,7 @@
+import uuid
 from datetime import date, timedelta
 from sqlalchemy import select
+import structlog
 from app.db.postgres import AsyncSessionLocal
 from app.models.policy import Policy
 from app.models.client import Client
@@ -13,6 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 async def run_premium_reminder_job(days_ahead: int = 7):
+    # No HTTP request to inherit a trace_id from — mint one so this job's log
+    # lines (and every agent/LLM call it triggers) share a single id.
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(trace_id=str(uuid.uuid4()))
+
     logger.info(f"Running premium reminder job — checking policies due in {days_ahead} days")
 
     today = date.today()

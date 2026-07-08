@@ -1,7 +1,9 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, Bell, Mail, LayoutDashboard, Shield, MessageCircle, Clock, FileText, BarChart2 } from "lucide-react";
+import { Users, Bell, Mail, LayoutDashboard, Shield, MessageCircle, Clock, FileText, BarChart2, LogOut } from "lucide-react";
+import { logout } from "@/lib/api";
+import { useAdvisor } from "@/lib/AdvisorContext";
 
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -16,6 +18,7 @@ const nav = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { advisor } = useAdvisor();
   return (
     <aside className="w-60 bg-white border-r border-gray-200 flex flex-col">
       <div className="flex items-center gap-2 px-6 py-5 border-b border-gray-200">
@@ -41,8 +44,17 @@ export default function Sidebar() {
           );
         })}
       </nav>
-      <div className="px-6 py-4 border-t border-gray-200 text-xs text-gray-400">
-        Phase 2 — v2.0.0
+      <div className="px-3 py-4 border-t border-gray-200">
+        {advisor && (
+          <p className="px-3 text-xs text-gray-500 truncate mb-2">{advisor.name}</p>
+        )}
+        <button
+          onClick={logout}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors"
+        >
+          <LogOut size={17} />
+          Logout
+        </button>
       </div>
     </aside>
   );

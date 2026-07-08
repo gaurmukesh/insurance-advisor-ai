@@ -41,13 +41,11 @@ export default function RenewalsPage() {
   const [preview, setPreview] = useState<any>(null);
   const [selectedPolicyId, setSelectedPolicyId] = useState("");
   const { advisor } = useAdvisor();
-  const advisorId = advisor?.id ?? "";
   const advisorName = advisor?.name ?? "";
 
   const { data: renewals = [], isLoading } = useQuery({
-    queryKey: ["renewals", advisorId, days],
-    queryFn: () => getUpcomingRenewals(advisorId, days),
-    enabled: !!advisorId,
+    queryKey: ["renewals", days],
+    queryFn: () => getUpcomingRenewals(days),
   });
 
   const draftMutation = useMutation({

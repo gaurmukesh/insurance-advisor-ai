@@ -1,12 +1,17 @@
-from fastapi import FastAPI
+import time
+import uuid
+
+import structlog
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from app.core.logging import configure_logging
 from app.core.observability import init_observability
 from app.core.rag import sync_policies
 from app.db.postgres import init_db, AsyncSessionLocal
-from app.api.routes import clients, recommendations, emails, ingest, advisors, whatsapp, pitch, documents, metrics, agents, approvals
+from app.api.routes import clients, recommendations, emails, ingest, advisors, whatsapp, pitch, documents, metrics, agents, approvals, auth
 from app.mcp.server import mcp
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -23,6 +28,8 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+configure_logging()
+request_logger = structlog.get_logger("http")
 
 scheduler = AsyncIOScheduler()
 
@@ -61,6 +68,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def add_trace_id(request: Request, call_next):
+    trace_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(trace_id=trace_id)
+
+    start = time.monotonic()
+    response = await call_next(request)
+    duration_ms = int((time.monotonic() - start) * 1000)
+
+    response.headers["X-Request-ID"] = trace_id
+    request_logger.info(
+        "request_complete",
+        method=request.method,
+        path=request.url.path,
+        status=response.status_code,
+        duration_ms=duration_ms,
+    )
+    return response
+
+
+app.include_router(auth.router)
 app.include_router(advisors.router)
 app.include_router(clients.router)
 app.include_router(recommendations.router)

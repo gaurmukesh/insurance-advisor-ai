@@ -21,6 +21,8 @@ from unittest.mock import AsyncMock, patch
 from app.main import app
 from app.db.postgres import Base, get_db
 from app.core.config import settings
+from app.core.security import hash_password
+from app.models.advisor import Advisor
 
 # Import all models so Base.metadata includes every table before create_all runs.
 # Use aliased imports to avoid shadowing the FastAPI `app` instance imported above.
@@ -87,6 +89,35 @@ async def client():
         transport=ASGITransport(app=app), base_url="http://test"
     ) as ac:
         yield ac
+
+
+ADVISOR_PASSWORD = "test-password-123"
+
+
+@pytest_asyncio.fixture
+async def advisor(db_session):
+    """An advisor row with a known password, for auth-dependent tests."""
+    row = Advisor(
+        name="Test Advisor",
+        email="test-advisor@example.com",
+        phone="9999999999",
+        password_hash=hash_password(ADVISOR_PASSWORD),
+    )
+    db_session.add(row)
+    await db_session.commit()
+    await db_session.refresh(row)
+    return row
+
+
+@pytest_asyncio.fixture
+async def auth_headers(client, advisor):
+    """Authorization header for `advisor`, obtained via a real login call."""
+    response = await client.post(
+        "/api/v1/auth/login",
+        json={"email": advisor.email, "password": ADVISOR_PASSWORD},
+    )
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture

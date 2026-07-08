@@ -1,9 +1,14 @@
+import json
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
+from app.core.semantic_cache import get_cached_value, set_cached_value
 import openai
 
 _openai_client: openai.AsyncOpenAI | None = None
+
+_EMBEDDING_MODEL = "text-embedding-3-small"
 
 
 def _get_openai_client() -> openai.AsyncOpenAI:
@@ -14,11 +19,19 @@ def _get_openai_client() -> openai.AsyncOpenAI:
 
 
 async def get_embedding(text_input: str) -> list[float]:
+    cache_key = f"{_EMBEDDING_MODEL}:{text_input}"
+    cached = await get_cached_value("embedding", cache_key)
+    if cached:
+        return json.loads(cached)
+
     response = await _get_openai_client().embeddings.create(
-        model="text-embedding-3-small",
+        model=_EMBEDDING_MODEL,
         input=text_input,
     )
-    return response.data[0].embedding
+    embedding = response.data[0].embedding
+
+    await set_cached_value("embedding", cache_key, json.dumps(embedding), ttl=86400)
+    return embedding
 
 
 async def similarity_search(db: AsyncSession, query: str, top_k: int = 5) -> list[dict]:

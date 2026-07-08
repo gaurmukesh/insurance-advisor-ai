@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Sidebar from "@/components/Sidebar";
+import AppShell from "@/components/AppShell";
 import Providers from "@/components/Providers";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -16,10 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className={inter.className}>
         <Providers>
-          <div className="flex h-screen bg-gray-50">
-            <Sidebar />
-            <main className="flex-1 overflow-y-auto p-6">{children}</main>
-          </div>
+          <AppShell>{children}</AppShell>
         </Providers>
       </body>
     </html>

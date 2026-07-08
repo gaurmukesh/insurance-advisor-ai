@@ -4,7 +4,9 @@ from sqlalchemy import select
 from pydantic import BaseModel
 from datetime import date, timedelta
 from typing import Optional
+from app.api.deps import get_current_advisor
 from app.db.postgres import get_db
+from app.models.advisor import Advisor
 from app.models.client import Client
 from app.models.policy import Policy
 
@@ -12,7 +14,6 @@ router = APIRouter(prefix="/api/v1", tags=["clients"])
 
 
 class ClientCreate(BaseModel):
-    advisor_id: str
     name: str
     email: str | None = None
     phone: str | None = None
@@ -42,9 +43,21 @@ class ClientUpdate(BaseModel):
     city_tier: str | None = None
 
 
+async def _get_own_client(db: AsyncSession, client_id: str, advisor: Advisor) -> Client:
+    result = await db.execute(select(Client).where(Client.id == client_id))
+    client = result.scalar_one_or_none()
+    if not client or client.advisor_id != advisor.id:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return client
+
+
 @router.post("/leads")
-async def create_lead(data: ClientCreate, db: AsyncSession = Depends(get_db)):
-    client = Client(**data.model_dump())
+async def create_lead(
+    data: ClientCreate,
+    db: AsyncSession = Depends(get_db),
+    current: Advisor = Depends(get_current_advisor),
+):
+    client = Client(advisor_id=current.id, **data.model_dump())
     db.add(client)
     await db.commit()
     await db.refresh(client)
@@ -53,11 +66,11 @@ async def create_lead(data: ClientCreate, db: AsyncSession = Depends(get_db)):
 
 @router.get("/leads")
 async def list_leads(
-    advisor_id: str,
     status: str | None = None,
     db: AsyncSession = Depends(get_db),
+    current: Advisor = Depends(get_current_advisor),
 ):
-    query = select(Client).where(Client.advisor_id == advisor_id)
+    query = select(Client).where(Client.advisor_id == current.id)
     if status:
         query = query.where(Client.status == status)
     query = query.order_by(Client.created_at.desc())
@@ -66,20 +79,22 @@ async def list_leads(
 
 
 @router.get("/leads/{client_id}")
-async def get_lead(client_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Client).where(Client.id == client_id))
-    client = result.scalar_one_or_none()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-    return client
+async def get_lead(
+    client_id: str,
+    db: AsyncSession = Depends(get_db),
+    current: Advisor = Depends(get_current_advisor),
+):
+    return await _get_own_client(db, client_id, current)
 
 
 @router.put("/leads/{client_id}")
-async def update_lead(client_id: str, data: ClientUpdate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Client).where(Client.id == client_id))
-    client = result.scalar_one_or_none()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
+async def update_lead(
+    client_id: str,
+    data: ClientUpdate,
+    db: AsyncSession = Depends(get_db),
+    current: Advisor = Depends(get_current_advisor),
+):
+    client = await _get_own_client(db, client_id, current)
     for field, value in data.model_dump(exclude_none=True).items():
         setattr(client, field, value)
     await db.commit()
@@ -89,9 +104,9 @@ async def update_lead(client_id: str, data: ClientUpdate, db: AsyncSession = Dep
 
 @router.get("/renewals/upcoming")
 async def upcoming_renewals(
-    advisor_id: str,
     days: int = 30,
     db: AsyncSession = Depends(get_db),
+    current: Advisor = Depends(get_current_advisor),
 ):
     today = date.today()
     until = today + timedelta(days=days)
@@ -99,7 +114,7 @@ async def upcoming_renewals(
     result = await db.execute(
         select(Policy, Client)
         .join(Client, Policy.client_id == Client.id)
-        .where(Client.advisor_id == advisor_id)
+        .where(Client.advisor_id == current.id)
         .where(Policy.next_due_date >= today)
         .where(Policy.next_due_date <= until)
         .order_by(Policy.next_due_date)
@@ -135,10 +150,12 @@ class PolicyCreate(BaseModel):
 
 
 @router.post("/policies", status_code=201)
-async def create_policy(data: PolicyCreate, db: AsyncSession = Depends(get_db)):
-    client_row = await db.execute(select(Client).where(Client.id == data.client_id))
-    if not client_row.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Client not found")
+async def create_policy(
+    data: PolicyCreate,
+    db: AsyncSession = Depends(get_db),
+    current: Advisor = Depends(get_current_advisor),
+):
+    await _get_own_client(db, data.client_id, current)
     policy = Policy(**data.model_dump())
     db.add(policy)
     await db.commit()

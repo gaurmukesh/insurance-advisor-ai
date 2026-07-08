@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, case
 from datetime import date, timedelta
+from app.api.deps import get_current_advisor
 from app.db.postgres import get_db
+from app.models.advisor import Advisor
 from app.models.client import Client
 from app.models.policy import Policy
 from app.models.email_log import EmailLog
@@ -13,9 +15,10 @@ router = APIRouter(prefix="/api/v1", tags=["metrics"])
 
 @router.get("/metrics")
 async def get_metrics(
-    advisor_id: str = Query(...),
     db: AsyncSession = Depends(get_db),
+    current: Advisor = Depends(get_current_advisor),
 ):
+    advisor_id = current.id
     # --- Lead stats ---
     lead_rows = await db.execute(
         select(Client.status, func.count(Client.id).label("count"))

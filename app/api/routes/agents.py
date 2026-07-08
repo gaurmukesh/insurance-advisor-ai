@@ -1,12 +1,22 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+import json
 
-from app.agents.needs_analysis_agent import build_needs_analysis_agent
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.agents.needs_analysis_agent import build_needs_analysis_agent, extract_gaps, save_interaction
 from app.agents.product_matching_agent import build_product_matching_agent
 from app.agents.lead_nurturing_agent import build_lead_nurturing_agent
 from app.agents.objection_handler_agent import build_objection_handler_agent
 from app.agents.policy_research_agent import build_policy_research_agent
 from app.agents.claims_renewals_agent import build_renewals_agent
+from app.api.deps import get_current_advisor
+from app.db.postgres import get_db
+from app.models.advisor import Advisor
+from app.models.client import Client
+from app.modules.need_analyzer import analyze_client_needs_stream
 
 router = APIRouter(prefix="/api/v1/agent", tags=["agents"])
 
@@ -21,7 +31,6 @@ class MatchProductsRequest(BaseModel):
 
 class NurtureLeadRequest(BaseModel):
     client_id: str
-    advisor_id: str
 
 class HandleObjectionRequest(BaseModel):
     client_id: str
@@ -29,11 +38,16 @@ class HandleObjectionRequest(BaseModel):
 
 class ResearchPolicyRequest(BaseModel):
     question: str
-    advisor_id: str
 
 class RenewalsRequest(BaseModel):
-    advisor_id: str
     days_ahead: int = 30
+
+
+async def _verify_own_client(db: AsyncSession, client_id: str, advisor: Advisor) -> None:
+    result = await db.execute(select(Client.advisor_id).where(Client.id == client_id))
+    row = result.scalar_one_or_none()
+    if row is None or row != advisor.id:
+        raise HTTPException(status_code=404, detail="Client not found")
 
 
 # ── 1. Needs Analysis Agent ────────────────────────────────────────────────
@@ -42,7 +56,12 @@ class RenewalsRequest(BaseModel):
 # Richer than /analyze-client: returns structured gaps + saves to DB.
 
 @router.post("/analyze-lead")
-async def agent_analyze_lead(data: AnalyzeLeadRequest):
+async def agent_analyze_lead(
+    data: AnalyzeLeadRequest,
+    db: AsyncSession = Depends(get_db),
+    current: Advisor = Depends(get_current_advisor),
+):
+    await _verify_own_client(db, data.client_id, current)
     agent = build_needs_analysis_agent()
     result = await agent.ainvoke({
         "client_id": data.client_id,
@@ -59,6 +78,52 @@ async def agent_analyze_lead(data: AnalyzeLeadRequest):
     }
 
 
+# Streaming variant of the above — tokens arrive as they're generated instead of
+# waiting ~15s for the full analysis. Same gap-extraction + DB save happen after
+# the stream completes, emitted as a final `done` event.
+
+@router.post("/analyze-lead/stream")
+async def agent_analyze_lead_stream(
+    data: AnalyzeLeadRequest,
+    db: AsyncSession = Depends(get_db),
+    current: Advisor = Depends(get_current_advisor),
+):
+    result = await db.execute(select(Client).where(Client.id == data.client_id))
+    client = result.scalar_one_or_none()
+    if not client or client.advisor_id != current.id:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    client_profile = {
+        "id": client.id, "name": client.name, "age": client.age, "income": client.income,
+        "family_size": client.family_size, "risk_appetite": client.risk_appetite,
+        "goals": client.goals, "liabilities_emi": client.liabilities_emi or 0,
+        "employment_type": client.employment_type or "Not specified",
+        "health_conditions": client.health_conditions or "None",
+        "existing_coverage": client.existing_coverage or "None",
+        "city_tier": client.city_tier or "Not specified",
+        "dependents_detail": client.dependents_detail or "None",
+    }
+
+    async def event_stream():
+        chunks: list[str] = []
+        async for token in analyze_client_needs_stream(db, client_profile):
+            chunks.append(token)
+            yield f"data: {json.dumps(token)}\n\n"
+
+        full_text = "".join(chunks)
+        gaps_result = await extract_gaps({"analysis_text": full_text})
+        interaction_result = await save_interaction({
+            "client_id": data.client_id, "analysis_text": full_text,
+        })
+        payload = {
+            "gaps": gaps_result.get("gaps", []),
+            "interaction_id": interaction_result.get("interaction_id", ""),
+        }
+        yield f"event: done\ndata: {json.dumps(payload)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
 # ── 2. Product Matching Agent ──────────────────────────────────────────────
 # Loads client → runs needs analysis → LLM generates 3 targeted search queries →
 # runs all queries in parallel against vector store → deduplicates chunks →
@@ -66,7 +131,12 @@ async def agent_analyze_lead(data: AnalyzeLeadRequest):
 # Better than /recommend-products: parallel search + fit scoring + saved record.
 
 @router.post("/match-products")
-async def agent_match_products(data: MatchProductsRequest):
+async def agent_match_products(
+    data: MatchProductsRequest,
+    db: AsyncSession = Depends(get_db),
+    current: Advisor = Depends(get_current_advisor),
+):
+    await _verify_own_client(db, data.client_id, current)
     agent = build_product_matching_agent()
     result = await agent.ainvoke({
         "client_id": data.client_id,
@@ -88,11 +158,16 @@ async def agent_match_products(data: MatchProductsRequest):
 # One call replaces three manual steps + requires human approval before sending.
 
 @router.post("/nurture-lead")
-async def agent_nurture_lead(data: NurtureLeadRequest):
+async def agent_nurture_lead(
+    data: NurtureLeadRequest,
+    db: AsyncSession = Depends(get_db),
+    current: Advisor = Depends(get_current_advisor),
+):
+    await _verify_own_client(db, data.client_id, current)
     agent = build_lead_nurturing_agent()
     result = await agent.ainvoke({
         "client_id": data.client_id,
-        "advisor_id": data.advisor_id,
+        "advisor_id": current.id,
         "client_profile": {}, "need_analysis": "", "gaps": [],
         "recommendations": [], "draft_email": {}, "approval_id": "", "errors": [],
     })
@@ -115,7 +190,12 @@ async def agent_nurture_lead(data: NurtureLeadRequest):
 # Better than /handle-objection: classifies type + suggests closing line + logs.
 
 @router.post("/handle-objection")
-async def agent_handle_objection(data: HandleObjectionRequest):
+async def agent_handle_objection(
+    data: HandleObjectionRequest,
+    db: AsyncSession = Depends(get_db),
+    current: Advisor = Depends(get_current_advisor),
+):
+    await _verify_own_client(db, data.client_id, current)
     agent = build_objection_handler_agent()
     result = await agent.ainvoke({
         "client_id": data.client_id,
@@ -143,11 +223,14 @@ async def agent_handle_objection(data: HandleObjectionRequest):
 # The only iterative RAG agent — loops until it has enough context.
 
 @router.post("/research-policy")
-async def agent_research_policy(data: ResearchPolicyRequest):
+async def agent_research_policy(
+    data: ResearchPolicyRequest,
+    current: Advisor = Depends(get_current_advisor),
+):
     agent = build_policy_research_agent()
     result = await agent.ainvoke({
         "question": data.question,
-        "advisor_id": data.advisor_id,
+        "advisor_id": current.id,
         "search_plan": [], "search_results": [],
         "searches_done": 0, "is_sufficient": False,
         "answer": "", "citations": [], "errors": [],
@@ -169,10 +252,13 @@ async def agent_research_policy(data: ResearchPolicyRequest):
 # Only agent that handles bulk multi-client work in one call.
 
 @router.post("/renewals")
-async def agent_renewals(data: RenewalsRequest):
+async def agent_renewals(
+    data: RenewalsRequest,
+    current: Advisor = Depends(get_current_advisor),
+):
     agent = build_renewals_agent()
     result = await agent.ainvoke({
-        "advisor_id": data.advisor_id,
+        "advisor_id": current.id,
         "days_ahead": data.days_ahead,
         "renewals": [], "scored_renewals": [],
         "priority_renewals": [], "draft_messages": [],
@@ -182,7 +268,7 @@ async def agent_renewals(data: RenewalsRequest):
     if errors and errors != ["No upcoming renewals found"]:
         raise HTTPException(status_code=400, detail=errors[0])
     return {
-        "advisor_id": data.advisor_id,
+        "advisor_id": current.id,
         "days_ahead": data.days_ahead,
         "renewals_found": len(result.get("renewals", [])),
         "priority_count": len(result.get("priority_renewals", [])),

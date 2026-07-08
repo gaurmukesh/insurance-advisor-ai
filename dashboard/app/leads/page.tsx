@@ -2,7 +2,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getLeads, createLead, updateLead, Client } from "@/lib/api";
-import { useAdvisor } from "@/lib/AdvisorContext";
 import Link from "next/link";
 import { Plus, ChevronRight } from "lucide-react";
 
@@ -16,7 +15,7 @@ const statusColor: Record<string, string> = {
   lost: "bg-red-100 text-red-700",
 };
 
-function AddLeadModal({ onClose, advisorId }: { onClose: () => void; advisorId: string }) {
+function AddLeadModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const [form, setForm] = useState({
     name: "", email: "", phone: "", age: "", income: "",
@@ -34,7 +33,6 @@ function AddLeadModal({ onClose, advisorId }: { onClose: () => void; advisorId: 
   const handle = (e: React.FormEvent) => {
     e.preventDefault();
     mutation.mutate({
-      advisor_id: advisorId,
       ...form,
       age: form.age ? Number(form.age) : undefined,
       income: form.income ? Number(form.income) : undefined,
@@ -135,13 +133,10 @@ export default function LeadsPage() {
   const [showModal, setShowModal] = useState(false);
   const [filterStatus, setFilterStatus] = useState("");
   const qc = useQueryClient();
-  const { advisor } = useAdvisor();
-  const advisorId = advisor?.id ?? "";
 
   const { data: leads = [], isLoading } = useQuery({
-    queryKey: ["leads", advisorId, filterStatus],
-    queryFn: () => getLeads(advisorId, filterStatus || undefined),
-    enabled: !!advisorId,
+    queryKey: ["leads", filterStatus],
+    queryFn: () => getLeads(filterStatus || undefined),
   });
 
   const statusMutation = useMutation({
@@ -221,7 +216,7 @@ export default function LeadsPage() {
         )}
       </div>
 
-      {showModal && <AddLeadModal onClose={() => setShowModal(false)} advisorId={advisorId} />}
+      {showModal && <AddLeadModal onClose={() => setShowModal(false)} />}
     </div>
   );
 }

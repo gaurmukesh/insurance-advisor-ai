@@ -1,7 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { getLead, analyzeClient, recommendProducts, generatePitch, handleObjection, getCommonObjections, ProductRecommendation, ObjectionResponse } from "@/lib/api";
+import { getLead, streamAnalyzeLead, recommendProducts, generatePitch, handleObjection, getCommonObjections, ProductRecommendation, ObjectionResponse } from "@/lib/api";
 import { use } from "react";
 import { ArrowLeft, Brain, PackageSearch, Mic, ShieldAlert, Star, ChevronDown, ChevronUp } from "lucide-react";
 import Link from "next/link";
@@ -9,6 +9,7 @@ import Link from "next/link";
 export default function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [analysis, setAnalysis] = useState("");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [recommendations, setRecommendations] = useState<ProductRecommendation[]>([]);
   const [activeCard, setActiveCard] = useState<number | null>(null);
   const [existingPolicies, setExistingPolicies] = useState("");
@@ -20,13 +21,21 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   const { data: client, isLoading } = useQuery({
     queryKey: ["client", id],
     queryFn: () => getLead(id),
-    onSuccess: (data) => { if (data.existing_coverage) setExistingPolicies(data.existing_coverage); },
   });
 
-  const analyzeMutation = useMutation({
-    mutationFn: () => analyzeClient(id, existingPolicies),
-    onSuccess: (data) => setAnalysis(data.analysis),
-  });
+  useEffect(() => {
+    if (client?.existing_coverage) setExistingPolicies(client.existing_coverage);
+  }, [client?.existing_coverage]);
+
+  const runAnalysis = async () => {
+    setIsAnalyzing(true);
+    setAnalysis("");
+    try {
+      await streamAnalyzeLead(id, existingPolicies, (token) => setAnalysis((prev) => prev + token));
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   const recommendMutation = useMutation({
     mutationFn: () => recommendProducts(id, analysis),
@@ -107,12 +116,12 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           />
         </div>
         <button
-          onClick={() => analyzeMutation.mutate()}
-          disabled={analyzeMutation.isPending}
+          onClick={runAnalysis}
+          disabled={isAnalyzing}
           className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
         >
           <Brain size={15} />
-          {analyzeMutation.isPending ? "Analyzing..." : "Analyze Needs"}
+          {isAnalyzing ? "Analyzing..." : "Analyze Needs"}
         </button>
         {analysis && (
           <div className="bg-blue-50 rounded-lg p-4 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">

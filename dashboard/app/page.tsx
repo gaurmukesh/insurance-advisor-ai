@@ -22,18 +22,15 @@ function StatCard({ title, value, icon: Icon, color }: {
 
 export default function DashboardPage() {
   const { advisor } = useAdvisor();
-  const advisorId = advisor?.id ?? "";
 
   const { data: leads = [] } = useQuery({
-    queryKey: ["leads", advisorId],
-    queryFn: () => getLeads(advisorId),
-    enabled: !!advisorId,
+    queryKey: ["leads"],
+    queryFn: () => getLeads(),
   });
 
   const { data: renewals = [] } = useQuery({
-    queryKey: ["renewals", advisorId],
-    queryFn: () => getUpcomingRenewals(advisorId, 30),
-    enabled: !!advisorId,
+    queryKey: ["renewals", 30],
+    queryFn: () => getUpcomingRenewals(30),
   });
 
   const converted = leads.filter((l) => l.status === "converted").length;

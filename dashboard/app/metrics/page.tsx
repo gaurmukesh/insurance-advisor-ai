@@ -1,7 +1,6 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
 import { getMetrics, Metrics } from "@/lib/api";
-import { useAdvisor } from "@/lib/AdvisorContext";
 import { Mail, MessageCircle, TrendingUp, IndianRupee, Bell, Users } from "lucide-react";
 
 function StatCard({
@@ -160,13 +159,9 @@ function ActivityFeed({ activity }: { activity: Metrics["recent_activity"] }) {
 }
 
 export default function MetricsPage() {
-  const { advisor } = useAdvisor();
-  const advisorId = advisor?.id ?? "";
-
   const { data, isLoading } = useQuery({
-    queryKey: ["metrics", advisorId],
-    queryFn: () => getMetrics(advisorId),
-    enabled: !!advisorId,
+    queryKey: ["metrics"],
+    queryFn: () => getMetrics(),
     refetchInterval: 60000,
   });
 
