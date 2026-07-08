@@ -1,10 +1,13 @@
 from app.core.llm import chat_mini as chat
+from app.core.guardrails import validate_output
 
 SYSTEM_PROMPT = """You are an insurance advisor's assistant writing professional emails in India.
 Write warm, clear, and action-oriented emails in simple English.
 Always include the advisor's name and a clear call to action.
 Always write dates in long format (e.g. "August 1, 2026"), never in ISO or numeric format.
-Keep emails concise — under 200 words."""
+Keep emails concise — under 200 words.
+Never use IRDAI-prohibited phrases such as 'guaranteed returns', 'no risk',
+'risk-free', '100% safe investment', 'assured profit', or 'tax-free guaranteed'."""
 
 
 def _parse_email_response(response: str) -> dict:
@@ -49,6 +52,7 @@ BODY:
 <email body>
 """
     response = await chat(SYSTEM_PROMPT, user_message, trace_name="email_generator_reminder")
+    validate_output(response, context="email_generator_reminder")
     return _parse_email_response(response)
 
 
@@ -70,4 +74,5 @@ BODY:
 <email body>
 """
     response = await chat(SYSTEM_PROMPT, user_message, trace_name="email_generator_followup")
+    validate_output(response, context="email_generator_followup")
     return _parse_email_response(response)
