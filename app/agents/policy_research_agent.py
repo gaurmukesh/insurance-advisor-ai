@@ -7,6 +7,7 @@ from langgraph.graph import StateGraph, END
 from app.db.postgres import AsyncSessionLocal
 from app.db.vector_store import similarity_search, parse_chunk_metadata
 from app.core.llm import chat
+from app.core.guardrails import validate_input
 
 
 class PolicyResearchState(TypedDict):
@@ -24,6 +25,14 @@ class PolicyResearchState(TypedDict):
 async def receive_question(state: PolicyResearchState) -> dict:
     if not state.get("question"):
         return {"errors": ["No question provided"]}
+    return {}
+
+
+async def validate_scope(state: PolicyResearchState) -> dict:
+    try:
+        await validate_input(state["question"], context="policy_research")
+    except ValueError as e:
+        return {"errors": [str(e)]}
     return {}
 
 
@@ -105,12 +114,15 @@ def _check_sufficient(state) -> str:
 def build_policy_research_agent():
     g = StateGraph(PolicyResearchState)
     g.add_node("receive_question",          receive_question)
+    g.add_node("validate_scope",            validate_scope)
     g.add_node("plan_searches",             plan_searches)
     g.add_node("search_loop",              search_loop)
     g.add_node("validate_answer",           validate_answer)
     g.add_node("synthesize_with_citations", synthesize_with_citations)
     g.set_entry_point("receive_question")
     g.add_conditional_edges("receive_question", _check_errors,
+                            {"continue": "validate_scope", "error": END})
+    g.add_conditional_edges("validate_scope", _check_errors,
                             {"continue": "plan_searches", "error": END})
     g.add_edge("plan_searches", "search_loop")
     g.add_conditional_edges("search_loop", _check_sufficient,

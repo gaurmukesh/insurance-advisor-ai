@@ -9,6 +9,7 @@ from app.db.postgres import AsyncSessionLocal
 from app.models.client import Client
 from app.modules.pitch_handler import handle_objection
 from app.core.llm import chat_mini
+from app.core.guardrails import validate_input
 
 
 OBJECTION_TYPES = [
@@ -43,6 +44,14 @@ async def load_client(state: ObjectionHandlerState) -> dict:
         "health_conditions": row.health_conditions,
         "existing_policies": row.existing_coverage,
     }}
+
+
+async def validate_scope(state: ObjectionHandlerState) -> dict:
+    try:
+        await validate_input(state["objection"], context="objection_handler")
+    except ValueError as e:
+        return {"errors": [str(e)]}
+    return {}
 
 
 async def classify_objection(state: ObjectionHandlerState) -> dict:
@@ -106,12 +115,15 @@ def _check_errors(state) -> str:
 def build_objection_handler_agent():
     g = StateGraph(ObjectionHandlerState)
     g.add_node("load_client",        load_client)
+    g.add_node("validate_scope",     validate_scope)
     g.add_node("classify_objection", classify_objection)
     g.add_node("generate_response",  generate_response)
     g.add_node("suggest_next_pitch", suggest_next_pitch)
     g.add_node("log_interaction",    log_interaction)
     g.set_entry_point("load_client")
     g.add_conditional_edges("load_client", _check_errors,
+                            {"continue": "validate_scope", "error": END})
+    g.add_conditional_edges("validate_scope", _check_errors,
                             {"continue": "classify_objection", "error": END})
     g.add_edge("classify_objection", "generate_response")
     g.add_edge("generate_response",  "suggest_next_pitch")
