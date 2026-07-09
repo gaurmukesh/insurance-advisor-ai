@@ -1,6 +1,7 @@
 import ast
 import json
 
+import httpx
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
@@ -15,7 +16,14 @@ _EMBEDDING_MODEL = "text-embedding-3-small"
 def _get_openai_client() -> openai.AsyncOpenAI:
     global _openai_client
     if _openai_client is None:
-        _openai_client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        # Fail fast if OpenAI is unreachable (5s connect); embeddings are small
+        # single-shot calls so 20s read is generous. max_retries backs off on
+        # transient connection/rate-limit/5xx errors.
+        _openai_client = openai.AsyncOpenAI(
+            api_key=settings.OPENAI_API_KEY,
+            timeout=httpx.Timeout(20.0, connect=5.0),
+            max_retries=3,
+        )
     return _openai_client
 
 

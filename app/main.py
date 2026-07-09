@@ -1,10 +1,11 @@
 import time
 import uuid
 
+import openai
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.core.logging import configure_logging
@@ -41,9 +42,14 @@ async def lifespan(app: FastAPI):
     logger.info("Database initialized")
 
     async with AsyncSessionLocal() as db:
-        new_chunks = await sync_policies(db)
-        if new_chunks:
-            logger.info(f"RAG sync: {new_chunks} new chunks ingested from data/policies/")
+        try:
+            new_chunks = await sync_policies(db)
+            if new_chunks:
+                logger.info(f"RAG sync: {new_chunks} new chunks ingested from data/policies/")
+        except (openai.APIConnectionError, openai.RateLimitError, openai.InternalServerError) as e:
+            # OpenAI outage shouldn't take the whole app down — skip ingestion for
+            # now, it'll pick up any un-ingested PDFs on the next restart.
+            logger.error(f"RAG sync skipped — OpenAI unavailable at startup: {e}")
 
     scheduler.add_job(run_premium_reminder_job, "cron", hour=8, minute=0)
     scheduler.start()
@@ -89,6 +95,18 @@ async def add_trace_id(request: Request, call_next):
     )
     return response
 
+
+async def _openai_unavailable_handler(request: Request, exc: Exception) -> JSONResponse:
+    request_logger.error("openai_unavailable", error=str(exc), path=request.url.path)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "AI service is temporarily unavailable. Please try again shortly."},
+    )
+
+
+app.add_exception_handler(openai.APIConnectionError, _openai_unavailable_handler)
+app.add_exception_handler(openai.RateLimitError, _openai_unavailable_handler)
+app.add_exception_handler(openai.InternalServerError, _openai_unavailable_handler)
 
 app.include_router(auth.router)
 app.include_router(advisors.router)

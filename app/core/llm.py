@@ -1,6 +1,7 @@
 import time
 from typing import AsyncIterator
 
+import httpx
 import openai
 import structlog
 from app.core.config import settings
@@ -16,7 +17,14 @@ _client: openai.AsyncOpenAI | None = None
 def _get_client() -> openai.AsyncOpenAI:
     global _client
     if _client is None:
-        _client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        # Fail fast if OpenAI is unreachable (5s connect) instead of the SDK's
+        # 10-minute default; 60s read allows time for a full 2048-token completion.
+        # max_retries covers transient connection/rate-limit/5xx errors with backoff.
+        _client = openai.AsyncOpenAI(
+            api_key=settings.OPENAI_API_KEY,
+            timeout=httpx.Timeout(60.0, connect=5.0),
+            max_retries=3,
+        )
     return _client
 
 
