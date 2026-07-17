@@ -23,7 +23,15 @@ def require_role(*roles: str):
         @functools.wraps(fn)
         async def wrapper(*args, **kwargs):
             advisor = current_advisor.get()
-            if advisor is None or advisor.role not in roles:
+            # None means no auth middleware ran at all -- i.e. this call came
+            # in over the stdio transport (Claude Desktop, local dev), which
+            # has no HTTP request to authenticate and is treated as a trusted
+            # local process, same as before roles existed. Over HTTP/SSE,
+            # MCPAuthMiddleware always either sets a real Advisor or
+            # short-circuits with 401 before a tool is ever reached, so None
+            # can only mean stdio here -- it can't mean "HTTP request with no
+            # token."
+            if advisor is not None and advisor.role not in roles:
                 return json.dumps({"error": "forbidden"})
             return await fn(*args, **kwargs)
 
@@ -34,16 +42,20 @@ def require_role(*roles: str):
 
 def scoped_advisor_id(requested: str) -> str:
     """Plain advisors can only ever act as themselves; manager/admin may pass
-    another advisor_id to see cross-advisor data. Only call this inside a
-    require_role-gated tool, where current_advisor is guaranteed set."""
+    another advisor_id to see cross-advisor data. Over stdio (no authenticated
+    advisor in context) this is a no-op -- the caller-supplied ID passes
+    through unchanged, matching pre-RBAC behavior."""
     advisor = current_advisor.get()
-    if advisor.role == "advisor":
+    if advisor is not None and advisor.role == "advisor":
         return advisor.id
     return requested
 
 
 def owns_client(client) -> bool:
     """True if the current caller may act on this client: it's their own
-    lead, or they hold a cross-advisor role (manager/admin)."""
+    lead, they hold a cross-advisor role (manager/admin), or there's no
+    authenticated advisor in context at all (stdio transport)."""
     advisor = current_advisor.get()
+    if advisor is None:
+        return True
     return advisor.role in ("manager", "admin") or client.advisor_id == advisor.id

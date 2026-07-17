@@ -12,12 +12,14 @@ def _set_advisor(role: str, advisor_id: str = "adv-1"):
 
 
 @pytest.mark.asyncio
-async def test_require_role_blocks_unauthenticated():
+async def test_require_role_allows_stdio_no_advisor_in_context():
+    """No advisor in context means stdio transport (no HTTP middleware ran) --
+    treated as a trusted local process, not an unauthenticated HTTP request."""
     @require_role("advisor")
     async def tool():
         return "ok"
 
-    assert "forbidden" in await tool()
+    assert await tool() == "ok"
 
 
 @pytest.mark.asyncio
@@ -87,3 +89,14 @@ def test_owns_client_true_for_manager_regardless_of_owner():
         assert owns_client(client) is True
     finally:
         current_advisor.reset(token)
+
+
+def test_scoped_advisor_id_passthrough_for_stdio_no_advisor_in_context():
+    assert current_advisor.get() is None
+    assert scoped_advisor_id("whatever-id") == "whatever-id"
+
+
+def test_owns_client_true_for_stdio_no_advisor_in_context():
+    assert current_advisor.get() is None
+    client = Client(advisor_id="anyone", name="Lead")
+    assert owns_client(client) is True
