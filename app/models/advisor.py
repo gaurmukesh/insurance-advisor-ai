@@ -13,6 +13,7 @@ class Advisor(Base):
     phone: Mapped[str] = mapped_column(String(15))
     license_no: Mapped[str] = mapped_column(String(50), nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=True)
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="advisor", server_default="advisor")
     created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now())
 
     clients: Mapped[list] = relationship("Client", back_populates="advisor")

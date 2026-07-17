@@ -152,7 +152,8 @@ jobs:
         run: |
           for f in migrations/init.sql migrations/agents.sql migrations/governance.sql \
                    migrations/whatsapp_logs.sql migrations/email_logs_add_edited_body.sql \
-                   migrations/rls.sql migrations/hnsw_index.sql migrations/auth.sql; do
+                   migrations/rls.sql migrations/hnsw_index.sql migrations/auth.sql \
+                   migrations/roles.sql; do
             echo "Applying $f"
             psql "$MIGRATION_DB_URL" -v ON_ERROR_STOP=1 -f "$f"
           done
