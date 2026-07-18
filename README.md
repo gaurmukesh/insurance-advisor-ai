@@ -273,6 +273,13 @@ Available tools: `list_leads`, `get_client`, `create_lead`, `update_lead_status`
 
 Over the authenticated HTTP/SSE transport, `create_lead` and `update_lead_status` require the caller's `Advisor.role` to be `manager` or `admin`; the other 8 tools accept any role, scoped to the caller's own data (or, for manager/admin, any advisor's). The stdio transport (Claude Desktop, local dev) has no auth layer and is unrestricted, same as today.
 
+Test that restriction end-to-end against a running server (needs one `role='advisor'` account and one `role='manager'`/`'admin'` account already created -- see the script's docstring):
+
+```bash
+DATABASE_URL=<async-url> python scripts/test_role_e2e.py \
+    --advisor-email advisor@example.com --manager-email manager@example.com
+```
+
 Test the server starts cleanly:
 
 ```bash
