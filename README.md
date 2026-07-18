@@ -216,6 +216,10 @@ psql $SYNC_DATABASE_URL -f migrations/agents.sql
 psql $SYNC_DATABASE_URL -f migrations/governance.sql
 psql $SYNC_DATABASE_URL -f migrations/hnsw_index.sql
 psql $SYNC_DATABASE_URL -f migrations/rls.sql
+psql $SYNC_DATABASE_URL -f migrations/whatsapp_logs.sql
+psql $SYNC_DATABASE_URL -f migrations/email_logs_add_edited_body.sql
+psql $SYNC_DATABASE_URL -f migrations/auth.sql
+psql $SYNC_DATABASE_URL -f migrations/roles.sql
 ```
 
 ### 4. Run the API
