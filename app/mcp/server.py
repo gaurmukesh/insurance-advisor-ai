@@ -20,6 +20,8 @@ from app.db.vector_store import similarity_search
 from app.mcp.rbac import require_role, scoped_advisor_id, owns_client
 
 _ANY_ROLE = ("advisor", "manager", "admin")
+# create_lead / update_lead_status are restricted to manager/admin.
+_WRITE_ROLE = ("manager", "admin")
 
 mcp = FastMCP(
     "Insurance Advisor AI",
@@ -81,7 +83,7 @@ async def get_client(client_id: str) -> str:
 
 # ── TOOL 3: Create lead ───────────────────────────────────────────
 @mcp.tool()
-@require_role(*_ANY_ROLE)
+@require_role(*_WRITE_ROLE)
 async def create_lead(
     advisor_id: str, name: str,
     email: Optional[str] = None, phone: Optional[str] = None,
@@ -111,7 +113,7 @@ async def create_lead(
 
 # ── TOOL 4: Update lead status ────────────────────────────────────
 @mcp.tool()
-@require_role(*_ANY_ROLE)
+@require_role(*_WRITE_ROLE)
 async def update_lead_status(
     client_id: str, status: str, notes: Optional[str] = None
 ) -> str:

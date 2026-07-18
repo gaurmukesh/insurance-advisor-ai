@@ -267,6 +267,8 @@ The `.mcp.json` at the project root auto-configures Claude Code. For Claude Desk
 
 Available tools: `list_leads`, `get_client`, `create_lead`, `update_lead_status`, `analyze_needs`, `get_recommendations`, `generate_sales_pitch`, `handle_client_objection`, `search_policy_docs`, `get_upcoming_renewals`
 
+Over the authenticated HTTP/SSE transport, `create_lead` and `update_lead_status` require the caller's `Advisor.role` to be `manager` or `admin`; the other 8 tools accept any role, scoped to the caller's own data (or, for manager/admin, any advisor's). The stdio transport (Claude Desktop, local dev) has no auth layer and is unrestricted, same as today.
+
 Test the server starts cleanly:
 
 ```bash

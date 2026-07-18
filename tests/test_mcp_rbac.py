@@ -1,5 +1,6 @@
 import pytest
 
+from app.mcp import server
 from app.mcp.auth_middleware import current_advisor
 from app.mcp.rbac import require_role, scoped_advisor_id, owns_client
 from app.models.advisor import Advisor
@@ -100,3 +101,26 @@ def test_owns_client_true_for_stdio_no_advisor_in_context():
     assert current_advisor.get() is None
     client = Client(advisor_id="anyone", name="Lead")
     assert owns_client(client) is True
+
+
+# ── create_lead / update_lead_status: manager/admin only ────────────────
+
+
+@pytest.mark.asyncio
+async def test_create_lead_blocked_for_plain_advisor():
+    token = _set_advisor("advisor")
+    try:
+        result = await server.create_lead(advisor_id="adv-1", name="Lead")
+        assert "forbidden" in result
+    finally:
+        current_advisor.reset(token)
+
+
+@pytest.mark.asyncio
+async def test_update_lead_status_blocked_for_plain_advisor():
+    token = _set_advisor("advisor")
+    try:
+        result = await server.update_lead_status(client_id="c-1", status="contacted")
+        assert "forbidden" in result
+    finally:
+        current_advisor.reset(token)
