@@ -23,6 +23,13 @@ load_dotenv()
 from sqlalchemy import select
 from app.db.postgres import AsyncSessionLocal
 from app.models.advisor import Advisor
+# Import every model so SQLAlchemy can resolve each relationship() string
+# reference at mapper-configuration time (matches app/mcp/server.py).
+from app.models.client import Client  # noqa: F401
+from app.models.policy import Policy  # noqa: F401
+from app.models.interaction import Interaction  # noqa: F401
+from app.models.email_log import EmailLog  # noqa: F401
+from app.models.whatsapp_log import WhatsAppLog  # noqa: F401
 from app.core.security import create_mcp_token, MCP_TOKEN_EXPIRE_DAYS
 
 
