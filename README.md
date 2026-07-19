@@ -272,7 +272,7 @@ The `.mcp.json` at the project root auto-configures Claude Code. For Claude Desk
 
 Available tools: `list_leads`, `get_client`, `create_lead`, `update_lead_status`, `analyze_needs`, `get_recommendations`, `generate_sales_pitch`, `handle_client_objection`, `search_policy_docs`, `get_upcoming_renewals`
 
-Over the authenticated HTTP/SSE transport, `create_lead` and `update_lead_status` require the caller's `Advisor.role` to be `manager` or `admin`; the other 8 tools accept any role, scoped to the caller's own data (or, for manager/admin, any advisor's). The stdio transport (Claude Desktop, local dev) has no auth layer and is unrestricted, same as today.
+Authorization is a declarative, IAM-style policy engine (`app/mcp/policies.py` + `app/mcp/policy_engine.py`) -- Allow/Deny statements over Action/Resource per role, default-deny, explicit-Deny-wins, evaluated by `authorize()` in `app/mcp/rbac.py`. Currently: `advisor` is Allow on 8 read/AI-assist tools scoped to `self`, Deny on `create_lead`/`update_lead_status`; `manager`/`admin` are Allow on everything (`mcp:*`) scoped to `*` (any advisor's data). Adding a role or changing a tool's access is a change to the policy document, not to a decorator argument. The stdio transport (Claude Desktop, local dev) has no auth layer and is unrestricted, same as today.
 
 **Auth on the HTTP/SSE transport** uses opaque, revocable tokens (`app/mcp/tokens.py`) -- not JWT. Only a SHA-256 hash is stored server-side, so a leaked token can be revoked individually without invalidating every other advisor's token:
 

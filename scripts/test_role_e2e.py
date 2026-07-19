@@ -1,7 +1,7 @@
 """
 End-to-end check that create_lead/update_lead_status are manager/admin-only
 over the authenticated MCP HTTP/SSE transport (/mcp/sse) -- unlike
-tests/test_mcp_rbac.py, which only exercises require_role() in isolation,
+tests/test_mcp_rbac.py, which only exercises authorize() in isolation,
 this drives a real MCP client against a running server.
 
 Requires:

@@ -8,7 +8,7 @@ from app.mcp.tokens import resolve_advisor_id
 from app.models.advisor import Advisor
 
 # Set by MCPAuthMiddleware for the lifetime of one HTTP/SSE connection, read by
-# app.mcp.rbac.require_role. Tool functions are plain callables registered with
+# app.mcp.rbac.authorize. Tool functions are plain callables registered with
 # FastMCP -- unlike FastAPI routes there's no Depends() to inject the caller,
 # so identity travels via contextvar instead of a function parameter.
 current_advisor: contextvars.ContextVar[Advisor | None] = contextvars.ContextVar(

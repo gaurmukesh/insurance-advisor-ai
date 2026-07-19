@@ -18,11 +18,7 @@ from app.modules.need_analyzer import analyze_client_needs
 from app.modules.product_recommender import recommend_products
 from app.modules.pitch_handler import generate_pitch, handle_objection
 from app.db.vector_store import similarity_search
-from app.mcp.rbac import require_role, scoped_advisor_id, owns_client
-
-_ANY_ROLE = ("advisor", "manager", "admin")
-# create_lead / update_lead_status are restricted to manager/admin.
-_WRITE_ROLE = ("manager", "admin")
+from app.mcp.rbac import authorize, scoped_advisor_id, owns_client
 
 mcp = FastMCP(
     "Insurance Advisor AI",
@@ -52,7 +48,7 @@ def _to_dict(c: Client) -> dict:
 
 # ── TOOL 1: List leads ────────────────────────────────────────────
 @mcp.tool()
-@require_role(*_ANY_ROLE)
+@authorize("mcp:list_leads")
 async def list_leads(advisor_id: str, status: Optional[str] = None) -> str:
     """List all leads for an advisor.
     status options: new | contacted | interested | converted | lost"""
@@ -68,7 +64,7 @@ async def list_leads(advisor_id: str, status: Optional[str] = None) -> str:
 
 # ── TOOL 2: Get client ────────────────────────────────────────────
 @mcp.tool()
-@require_role(*_ANY_ROLE)
+@authorize("mcp:get_client")
 async def get_client(client_id: str) -> str:
     """Get the full profile of a lead by their ID."""
     async with AsyncSessionLocal() as db:
@@ -84,7 +80,7 @@ async def get_client(client_id: str) -> str:
 
 # ── TOOL 3: Create lead ───────────────────────────────────────────
 @mcp.tool()
-@require_role(*_WRITE_ROLE)
+@authorize("mcp:create_lead")
 async def create_lead(
     advisor_id: str, name: str,
     email: Optional[str] = None, phone: Optional[str] = None,
@@ -114,7 +110,7 @@ async def create_lead(
 
 # ── TOOL 4: Update lead status ────────────────────────────────────
 @mcp.tool()
-@require_role(*_WRITE_ROLE)
+@authorize("mcp:update_lead_status")
 async def update_lead_status(
     client_id: str, status: str, notes: Optional[str] = None
 ) -> str:
@@ -138,7 +134,7 @@ async def update_lead_status(
 
 # ── TOOL 5: Analyze needs ─────────────────────────────────────────
 @mcp.tool()
-@require_role(*_ANY_ROLE)
+@authorize("mcp:analyze_needs")
 async def analyze_needs(client_id: str) -> str:
     """Run AI-powered insurance need analysis.
     Identifies gaps, priorities, and tax benefit opportunities (80C/80D)."""
@@ -155,7 +151,7 @@ async def analyze_needs(client_id: str) -> str:
 
 # ── TOOL 6: Get recommendations ───────────────────────────────────
 @mcp.tool()
-@require_role(*_ANY_ROLE)
+@authorize("mcp:get_recommendations")
 async def get_recommendations(client_id: str) -> str:
     """Get top-3 AI-recommended insurance products for a client.
     Returns JSON with product, insurer, premium, sum assured, tax benefit."""
@@ -175,7 +171,7 @@ async def get_recommendations(client_id: str) -> str:
 
 # ── TOOL 7: Generate pitch ────────────────────────────────────────
 @mcp.tool()
-@require_role(*_ANY_ROLE)
+@authorize("mcp:generate_sales_pitch")
 async def generate_sales_pitch(client_id: str) -> str:
     """Generate a personalized sales pitch for a client.
     Format: Opening → Key Need → Solution → Call to Action."""
@@ -192,7 +188,7 @@ async def generate_sales_pitch(client_id: str) -> str:
 
 # ── TOOL 8: Handle objection ──────────────────────────────────────
 @mcp.tool()
-@require_role(*_ANY_ROLE)
+@authorize("mcp:handle_client_objection")
 async def handle_client_objection(client_id: str, objection: str) -> str:
     """Get a structured response to a client objection.
     Common: 'premium too high', 'already have insurance', 'will think about it'"""
@@ -210,7 +206,7 @@ async def handle_client_objection(client_id: str, objection: str) -> str:
 
 # ── TOOL 9: Search policy docs ────────────────────────────────────
 @mcp.tool()
-@require_role(*_ANY_ROLE)
+@authorize("mcp:search_policy_docs")
 async def search_policy_docs(query: str, top_k: int = 5) -> str:
     """Semantic search across ingested policy PDFs.
     Returns relevant excerpts with similarity scores."""
@@ -223,7 +219,7 @@ async def search_policy_docs(query: str, top_k: int = 5) -> str:
 
 # ── TOOL 10: Upcoming renewals ────────────────────────────────────
 @mcp.tool()
-@require_role(*_ANY_ROLE)
+@authorize("mcp:get_upcoming_renewals")
 async def get_upcoming_renewals(advisor_id: str, days: int = 30) -> str:
     """List policies due for renewal in the next N days."""
     advisor_id = scoped_advisor_id(advisor_id)
