@@ -25,6 +25,7 @@ import app.models.policy  # noqa: F401
 import app.models.email_log  # noqa: F401
 import app.models.interaction  # noqa: F401
 import app.models.whatsapp_log  # noqa: F401
+import app.models.mcp_token  # noqa: F401
 from app.scheduler.premium_reminder import run_premium_reminder_job
 import logging
 

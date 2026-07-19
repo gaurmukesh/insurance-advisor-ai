@@ -1,11 +1,10 @@
 import contextvars
 
-import jwt
 from sqlalchemy import select
 from starlette.responses import JSONResponse
 
-from app.core.security import decode_token
 from app.db.postgres import AsyncSessionLocal
+from app.mcp.tokens import resolve_advisor_id
 from app.models.advisor import Advisor
 
 # Set by MCPAuthMiddleware for the lifetime of one HTTP/SSE connection, read by
@@ -19,8 +18,11 @@ current_advisor: contextvars.ContextVar[Advisor | None] = contextvars.ContextVar
 
 class MCPAuthMiddleware:
     """Authenticates every request to the mounted MCP transport (both the SSE
-    connect and the POST /messages/ calls) with the same JWT the REST API
-    uses. Only covers the HTTP/SSE transport mounted in app.main -- the stdio
+    connect and the POST /messages/ calls) with an opaque token minted by
+    scripts/mint_mcp_token.py -- not the REST API's JWT. Opaque tokens are
+    individually revocable (app.mcp.tokens.revoke_token) without invalidating
+    every other advisor's token, which a JWT signing-key rotation would.
+    Only covers the HTTP/SSE transport mounted in app.main -- the stdio
     transport (`python -m app.mcp.server`, used by Claude Desktop) has no HTTP
     layer to authenticate and is treated as a trusted local process, same as
     today."""
@@ -51,11 +53,10 @@ class MCPAuthMiddleware:
 
     @staticmethod
     async def _authenticate(token: str) -> Advisor | None:
-        try:
-            advisor_id = decode_token(token)
-        except jwt.PyJWTError:
-            return None
         async with AsyncSessionLocal() as db:
+            advisor_id = await resolve_advisor_id(db, token)
+            if advisor_id is None:
+                return None
             return (
                 await db.execute(select(Advisor).where(Advisor.id == advisor_id))
             ).scalar_one_or_none()

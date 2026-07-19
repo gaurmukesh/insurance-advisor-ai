@@ -220,6 +220,7 @@ psql $SYNC_DATABASE_URL -f migrations/whatsapp_logs.sql
 psql $SYNC_DATABASE_URL -f migrations/email_logs_add_edited_body.sql
 psql $SYNC_DATABASE_URL -f migrations/auth.sql
 psql $SYNC_DATABASE_URL -f migrations/roles.sql
+psql $SYNC_DATABASE_URL -f migrations/mcp_tokens.sql
 ```
 
 ### 4. Run the API
@@ -272,6 +273,17 @@ The `.mcp.json` at the project root auto-configures Claude Code. For Claude Desk
 Available tools: `list_leads`, `get_client`, `create_lead`, `update_lead_status`, `analyze_needs`, `get_recommendations`, `generate_sales_pitch`, `handle_client_objection`, `search_policy_docs`, `get_upcoming_renewals`
 
 Over the authenticated HTTP/SSE transport, `create_lead` and `update_lead_status` require the caller's `Advisor.role` to be `manager` or `admin`; the other 8 tools accept any role, scoped to the caller's own data (or, for manager/admin, any advisor's). The stdio transport (Claude Desktop, local dev) has no auth layer and is unrestricted, same as today.
+
+**Auth on the HTTP/SSE transport** uses opaque, revocable tokens (`app/mcp/tokens.py`) -- not JWT. Only a SHA-256 hash is stored server-side, so a leaked token can be revoked individually without invalidating every other advisor's token:
+
+```bash
+# mint a token for the mcp-remote Claude Desktop config
+DATABASE_URL=<async-url> python scripts/mint_mcp_token.py --email you@example.com
+
+# list / revoke tokens
+DATABASE_URL=<async-url> python scripts/revoke_mcp_token.py --email you@example.com
+DATABASE_URL=<async-url> python scripts/revoke_mcp_token.py --revoke <token-id>
+```
 
 Test that restriction end-to-end against a running server (needs one `role='advisor'` account and one `role='manager'`/`'admin'` account already created -- see the script's docstring):
 

@@ -11,6 +11,7 @@ from app.models.advisor import Advisor  # noqa: F401
 from app.models.interaction import Interaction  # noqa: F401
 from app.models.email_log import EmailLog  # noqa: F401
 from app.models.whatsapp_log import WhatsAppLog  # noqa: F401
+from app.models.mcp_token import MCPToken  # noqa: F401
 from app.models.client import Client
 from app.models.policy import Policy
 from app.modules.need_analyzer import analyze_client_needs

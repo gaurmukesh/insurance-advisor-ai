@@ -31,6 +31,7 @@ import app.models.client as _m_client  # noqa: F401
 import app.models.policy as _m_policy  # noqa: F401
 import app.models.email_log as _m_email_log  # noqa: F401
 import app.models.interaction as _m_interaction  # noqa: F401
+import app.models.mcp_token as _m_mcp_token  # noqa: F401
 
 # ── Test database ──────────────────────────────────────────────────────────────
 TEST_DB_URL = settings.DATABASE_URL.replace("/insurance_ai", "/insurance_ai_test")
@@ -42,7 +43,7 @@ test_engine = create_async_engine(TEST_DB_URL, poolclass=NullPool, echo=False)
 TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
 _TRUNCATE_ALL = text(
-    "TRUNCATE advisors, clients, policies, email_logs, interactions RESTART IDENTITY CASCADE"
+    "TRUNCATE advisors, clients, policies, email_logs, interactions, mcp_tokens RESTART IDENTITY CASCADE"
 )
 
 

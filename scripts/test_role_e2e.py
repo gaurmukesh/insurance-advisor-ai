@@ -39,7 +39,8 @@ from app.models.policy import Policy  # noqa: F401
 from app.models.interaction import Interaction  # noqa: F401
 from app.models.email_log import EmailLog  # noqa: F401
 from app.models.whatsapp_log import WhatsAppLog  # noqa: F401
-from app.core.security import create_mcp_token
+from app.models.mcp_token import MCPToken  # noqa: F401
+from app.mcp.tokens import mint_token, revoke_token
 
 PASS = "\033[32mPASS\033[0m"
 FAIL = "\033[31mFAIL\033[0m"
@@ -90,8 +91,17 @@ async def main(url: str, advisor_email: str, manager_email: str):
             "may not mean what you think."
         )
 
-    advisor_token = create_mcp_token(advisor.id)
-    manager_token = create_mcp_token(manager.id)
+    async with AsyncSessionLocal() as db:
+        advisor_token = await mint_token(db, advisor.id)
+        manager_token = await mint_token(db, manager.id)
+        advisor_token_id = (
+            await db.execute(select(MCPToken).where(MCPToken.advisor_id == advisor.id)
+                              .order_by(MCPToken.created_at.desc()).limit(1))
+        ).scalar_one().id
+        manager_token_id = (
+            await db.execute(select(MCPToken).where(MCPToken.advisor_id == manager.id)
+                              .order_by(MCPToken.created_at.desc()).limit(1))
+        ).scalar_one().id
 
     print(f"\n=== {url} ===\n")
 
@@ -140,6 +150,12 @@ async def main(url: str, advisor_email: str, manager_email: str):
                 await db.delete(row)
                 await db.commit()
                 print(f"  deleted client {created_id}")
+
+    print("\n-- cleanup: revoking the two tokens this script minted --")
+    async with AsyncSessionLocal() as db:
+        await revoke_token(db, advisor_token_id)
+        await revoke_token(db, manager_token_id)
+        print("  revoked advisor + manager test tokens")
 
     passed = sum(1 for _, p, _ in results if p)
     failed = sum(1 for _, p, _ in results if not p)

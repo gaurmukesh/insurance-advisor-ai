@@ -1,5 +1,7 @@
 """
-Mints a long-lived JWT for the mcp-remote Claude Desktop bridge to /mcp/sse.
+Mints a long-lived, revocable opaque token for the mcp-remote Claude Desktop
+bridge to /mcp/sse. Only the raw token is printed here -- the DB stores its
+SHA-256 hash (app/mcp/tokens.py), so this is the only time it's recoverable.
 
 Run this against whichever DATABASE_URL points at the Postgres holding the
 advisor account -- PROD_DATABASE_URL for the deployed Lightsail service (what
@@ -30,7 +32,8 @@ from app.models.policy import Policy  # noqa: F401
 from app.models.interaction import Interaction  # noqa: F401
 from app.models.email_log import EmailLog  # noqa: F401
 from app.models.whatsapp_log import WhatsAppLog  # noqa: F401
-from app.core.security import create_mcp_token, MCP_TOKEN_EXPIRE_DAYS
+from app.models.mcp_token import MCPToken  # noqa: F401
+from app.mcp.tokens import mint_token, MCP_TOKEN_EXPIRE_DAYS
 
 
 async def main(email: str):
@@ -42,9 +45,9 @@ async def main(email: str):
             print(f"No advisor found with email {email}")
             sys.exit(1)
 
-        token = create_mcp_token(advisor.id)
+        token = await mint_token(db, advisor.id)
         print(f"Advisor: {advisor.name} ({advisor.id}), role={advisor.role}")
-        print(f"Valid for {MCP_TOKEN_EXPIRE_DAYS} days.\n")
+        print(f"Valid for {MCP_TOKEN_EXPIRE_DAYS} days. Revoke with scripts/revoke_mcp_token.py.\n")
         print(token)
 
 
