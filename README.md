@@ -200,6 +200,12 @@ REDIS_URL=redis://localhost:6379
 # Optional — WhatsApp
 WHATSAPP_PHONE_NUMBER_ID=...
 WHATSAPP_ACCESS_TOKEN=...
+
+# Optional — S3-backed policy PDF ingestion (falls back to local data/policies/ if unset)
+AWS_REGION=ap-south-1
+POLICIES_S3_BUCKET=...
+POLICIES_S3_PREFIX=
+POLICIES_SQS_QUEUE_URL=...   # set after running scripts/setup_s3_ingestion.py
 ```
 
 ### 2. Start the database

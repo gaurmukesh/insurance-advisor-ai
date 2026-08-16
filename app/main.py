@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import time
 import uuid
 
@@ -8,10 +10,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from app.core.config import settings
 from app.core.logging import configure_logging
 from app.core.observability import init_observability
 from app.core.rag import sync_policies
 from app.db.postgres import init_db, AsyncSessionLocal
+from app.workers.s3_ingest_consumer import run_sqs_consumer
 from app.api.routes import clients, recommendations, emails, ingest, advisors, whatsapp, pitch, documents, metrics, agents, approvals, auth
 from app.mcp.server import mcp
 from app.mcp.auth_middleware import MCPAuthMiddleware
@@ -47,7 +51,7 @@ async def lifespan(app: FastAPI):
         try:
             new_chunks = await sync_policies(db)
             if new_chunks:
-                logger.info(f"RAG sync: {new_chunks} new chunks ingested from data/policies/")
+                logger.info(f"RAG sync: {new_chunks} new chunks ingested")
         except (openai.APIConnectionError, openai.RateLimitError, openai.InternalServerError) as e:
             # OpenAI outage shouldn't take the whole app down — skip ingestion for
             # now, it'll pick up any un-ingested PDFs on the next restart.
@@ -57,7 +61,16 @@ async def lifespan(app: FastAPI):
     scheduler.start()
     logger.info("Scheduler started — premium reminders run daily at 8:00 AM")
 
+    sqs_task = None
+    if settings.POLICIES_SQS_QUEUE_URL:
+        sqs_task = asyncio.create_task(run_sqs_consumer())
+
     yield
+
+    if sqs_task:
+        sqs_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await sqs_task
 
     scheduler.shutdown()
 
