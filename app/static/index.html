@@ -224,7 +224,7 @@
       </div>
 
       <!-- Handle Objection -->
-      <div class="border rounded-lg p-4">
+      <div class="border rounded-lg p-4 mb-4">
         <div class="flex justify-between items-center mb-2">
           <h3 class="font-semibold text-gray-700">Handle Objection</h3>
           <button onclick="handleObjection()" class="btn-ai">Get Response</button>
@@ -238,6 +238,16 @@
           <option value="my employer already covers me">my employer already covers me</option>
         </select>
         <div id="objectionOutput" class="hidden mt-3 space-y-2"></div>
+      </div>
+
+      <!-- Nurture Lead -->
+      <div class="border rounded-lg p-4">
+        <div class="flex justify-between items-center mb-2">
+          <h3 class="font-semibold text-gray-700">Nurture Lead</h3>
+          <button onclick="nurtureLead()" class="btn-ai">Queue Follow-Up Email</button>
+        </div>
+        <p class="text-xs text-gray-400 mb-2">Runs need analysis + drafts a follow-up email, then queues it in Approvals for you to review before sending.</p>
+        <div id="nurtureOutput" class="hidden mt-3 bg-amber-50 rounded-lg p-4 ai-output text-gray-700"></div>
       </div>
     </div>
   </section>
@@ -591,6 +601,25 @@
           <p class="text-sm text-gray-700">${val || '—'}</p>
         </div>`).join('');
       el.classList.remove('hidden');
+    } else {
+      el.innerHTML = '<p class="text-red-500 text-sm">' + (await res.json()).detail + '</p>';
+      el.classList.remove('hidden');
+    }
+  }
+
+  async function nurtureLead() {
+    if (!currentAiClientId) { alert('Select a client first.'); return; }
+    const btn = event.target; btn.dataset.label = btn.textContent; setLoading(btn, true);
+    const res = await authFetch(`${API}/agent/nurture-lead`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ client_id: currentAiClientId }) });
+    setLoading(btn, false);
+    const el = document.getElementById('nurtureOutput');
+    if (res.ok) {
+      const d = await res.json();
+      el.innerHTML = `<p class="font-semibold text-gray-700 mb-1">Queued for approval ✓</p>
+        <p class="text-sm">Subject: ${d.draft_email.subject}</p>
+        <p class="text-xs text-gray-500 mt-1">Check the Approvals tab to review and send.</p>`;
+      el.classList.remove('hidden');
+      refreshApprovalBadge();
     } else {
       el.innerHTML = '<p class="text-red-500 text-sm">' + (await res.json()).detail + '</p>';
       el.classList.remove('hidden');
