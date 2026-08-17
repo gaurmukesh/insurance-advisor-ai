@@ -19,12 +19,19 @@ class PdfExtractionError(Exception):
 
 
 async def ingest_pdf_bytes(db: AsyncSession, pdf_bytes: bytes, metadata: dict) -> int:
+    source = metadata.get("source", "<unknown>")
     try:
         reader = PdfReader(io.BytesIO(pdf_bytes))
         full_text = "\n".join(page.extract_text() or "" for page in reader.pages)
     except Exception as e:
-        source = metadata.get("source", "<unknown>")
         raise PdfExtractionError(f"failed to extract text from {source}: {e}") from e
+
+    if not full_text.strip():
+        # A structurally valid PDF (e.g. scanned images with no text layer, or a
+        # blank template) extracts to "" without raising -- treat that the same
+        # as a real extraction failure so it retries/DLQs instead of silently
+        # "succeeding" with 0 chunks and never surfacing anywhere.
+        raise PdfExtractionError(f"{source} contains no extractable text")
 
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     chunks = splitter.split_text(full_text)
