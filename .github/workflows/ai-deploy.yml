@@ -180,7 +180,13 @@ jobs:
                   \"SENDGRID_FROM_EMAIL\": \"${{ secrets.SENDGRID_FROM_EMAIL }}\",
                   \"META_WHATSAPP_TOKEN\": \"${{ secrets.META_WHATSAPP_TOKEN }}\",
                   \"META_PHONE_NUMBER_ID\": \"${{ secrets.META_PHONE_NUMBER_ID }}\",
-                  \"META_VERIFY_TOKEN\": \"${{ secrets.META_VERIFY_TOKEN }}\"
+                  \"META_VERIFY_TOKEN\": \"${{ secrets.META_VERIFY_TOKEN }}\",
+                  \"AWS_REGION\": \"ap-south-1\",
+                  \"POLICIES_S3_BUCKET\": \"${{ secrets.POLICIES_S3_BUCKET }}\",
+                  \"POLICIES_S3_PREFIX\": \"\",
+                  \"POLICIES_SQS_QUEUE_URL\": \"${{ secrets.POLICIES_SQS_QUEUE_URL }}\",
+                  \"AWS_ACCESS_KEY_ID\": \"${{ secrets.APP_AWS_ACCESS_KEY_ID }}\",
+                  \"AWS_SECRET_ACCESS_KEY\": \"${{ secrets.APP_AWS_SECRET_ACCESS_KEY }}\"
                 }
               }
             }" \
