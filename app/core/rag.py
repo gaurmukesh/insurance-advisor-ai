@@ -1,3 +1,4 @@
+import asyncio
 import io
 import logging
 from pathlib import Path
@@ -18,8 +19,10 @@ class PdfExtractionError(Exception):
     without touching the DB."""
 
 
-async def ingest_pdf_bytes(db: AsyncSession, pdf_bytes: bytes, metadata: dict) -> int:
-    source = metadata.get("source", "<unknown>")
+def _extract_chunks(pdf_bytes: bytes, source: str) -> list[str]:
+    """CPU-bound PDF parsing and splitting -- run via asyncio.to_thread so it
+    doesn't block the event loop (and everything else sharing it, e.g. HTTP
+    request handling) for the duration of a large PDF."""
     try:
         reader = PdfReader(io.BytesIO(pdf_bytes))
         full_text = "\n".join(page.extract_text() or "" for page in reader.pages)
@@ -34,10 +37,21 @@ async def ingest_pdf_bytes(db: AsyncSession, pdf_bytes: bytes, metadata: dict) -
         raise PdfExtractionError(f"{source} contains no extractable text")
 
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    chunks = splitter.split_text(full_text)
+    return splitter.split_text(full_text)
+
+
+async def ingest_pdf_bytes(db: AsyncSession, pdf_bytes: bytes, metadata: dict) -> int:
+    source = metadata.get("source", "<unknown>")
+    chunks = await asyncio.to_thread(_extract_chunks, pdf_bytes, source)
 
     for chunk in chunks:
         await insert_chunk(db, chunk, metadata)
+
+    # Commit once, after every chunk is inserted, so a crash or exception
+    # partway through a large PDF leaves nothing committed -- the caller's
+    # rollback discards the whole attempt instead of leaving a partial set
+    # of chunks that later reads as "already ingested" and never retries.
+    await db.commit()
 
     return len(chunks)
 

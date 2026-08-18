@@ -71,7 +71,6 @@ async def insert_chunk(db: AsyncSession, content: str, metadata: dict):
         """),
         {"content": content, "metadata": json.dumps(metadata), "embedding": embedding_str},
     )
-    await db.commit()
 
 
 def parse_chunk_metadata(raw: str) -> dict:
