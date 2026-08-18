@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     POLICIES_S3_BUCKET: str = ""
     POLICIES_S3_PREFIX: str = ""
     POLICIES_SQS_QUEUE_URL: str = ""
+    CLOUDWATCH_LOG_GROUP: str = ""
 
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_PUBLIC_KEY: str = ""

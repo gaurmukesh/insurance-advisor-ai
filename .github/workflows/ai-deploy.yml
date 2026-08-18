@@ -185,6 +185,7 @@ jobs:
                   \"POLICIES_S3_BUCKET\": \"${{ secrets.POLICIES_S3_BUCKET }}\",
                   \"POLICIES_S3_PREFIX\": \"\",
                   \"POLICIES_SQS_QUEUE_URL\": \"${{ secrets.POLICIES_SQS_QUEUE_URL }}\",
+                  \"CLOUDWATCH_LOG_GROUP\": \"/insurance-advisor-ai/app\",
                   \"AWS_ACCESS_KEY_ID\": \"${{ secrets.APP_AWS_ACCESS_KEY_ID }}\",
                   \"AWS_SECRET_ACCESS_KEY\": \"${{ secrets.APP_AWS_SECRET_ACCESS_KEY }}\"
                 }
