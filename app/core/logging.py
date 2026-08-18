@@ -41,11 +41,13 @@ def _configure_cloudwatch_handler() -> None:
     if not settings.CLOUDWATCH_LOG_GROUP:
         return
 
+    import boto3
     import watchtower
 
+    logs_client = boto3.client("logs", region_name=settings.AWS_REGION or None)
     handler = watchtower.CloudWatchLogHandler(
         log_group_name=settings.CLOUDWATCH_LOG_GROUP,
-        region_name=settings.AWS_REGION or None,
+        boto3_client=logs_client,
         send_interval=10,
     )
     handler.setFormatter(logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s"))
