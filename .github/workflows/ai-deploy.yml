@@ -164,6 +164,13 @@ jobs:
 
       - name: Deploy to Lightsail
         run: |
+          PREV_VERSION=$(aws lightsail get-container-service-deployments \
+            --service-name ${{ vars.LIGHTSAIL_SERVICE_NAME }} \
+            --region ap-south-1 \
+            --query 'deployments[0].version' --output text 2>/dev/null || echo 0)
+          [ "$PREV_VERSION" = "None" ] && PREV_VERSION=0
+          echo "NEW_VERSION=$((PREV_VERSION + 1))" >> $GITHUB_ENV
+
           aws lightsail create-container-service-deployment \
             --region ap-south-1 \
             --service-name ${{ vars.LIGHTSAIL_SERVICE_NAME }} \
@@ -196,6 +203,36 @@ jobs:
               \"containerPort\": 8000,
               \"healthCheck\": {\"path\": \"/health\", \"intervalSeconds\": 10}
             }"
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ap-south-1
+
+      - name: Wait for new deployment to become ACTIVE
+        run: |
+          # create-container-service-deployment only submits the request --
+          # it doesn't wait for Lightsail to actually roll the new version
+          # out. If the container crashes on startup, Lightsail marks this
+          # deployment FAILED and silently keeps the previous version
+          # serving traffic, so a plain /health curl (next step) can't
+          # detect it -- the old, still-healthy nodes answer for it. Poll
+          # this specific deployment's own state instead.
+          for i in $(seq 1 20); do
+            STATE=$(aws lightsail get-container-service-deployments \
+              --service-name ${{ vars.LIGHTSAIL_SERVICE_NAME }} \
+              --region ap-south-1 \
+              --query "deployments[?version==\`${NEW_VERSION}\`] | [0].state" \
+              --output text)
+            echo "Attempt $i: deployment v${NEW_VERSION} state=$STATE"
+            [ "$STATE" = "ACTIVE" ] && break
+            if [ "$STATE" = "FAILED" ]; then
+              echo "Deployment v${NEW_VERSION} FAILED -- check container logs:"
+              echo "aws lightsail get-container-log --service-name ${{ vars.LIGHTSAIL_SERVICE_NAME }} --container-name app --region ap-south-1"
+              exit 1
+            fi
+            sleep 15
+          done
+          [ "$STATE" = "ACTIVE" ] || (echo "Deployment v${NEW_VERSION} did not reach ACTIVE within timeout (state=$STATE)" && exit 1)
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
