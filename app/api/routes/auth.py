@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_advisor
+from app.core.rate_limit import limiter
 from app.core.security import create_access_token, verify_password
 from app.db.postgres import get_db
 from app.models.advisor import Advisor
@@ -33,7 +34,8 @@ def _advisor_dict(advisor: Advisor) -> dict:
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("10/minute")
+async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends(get_db)):
     advisor = (
         await db.execute(select(Advisor).where(Advisor.email == data.email))
     ).scalar_one_or_none()

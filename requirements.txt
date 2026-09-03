@@ -13,6 +13,9 @@ pgvector==0.3.2
 # Cache
 redis==5.0.4
 
+# Rate limiting
+slowapi==0.1.9
+
 # LLM + Embeddings
 openai>=2.0.0
 

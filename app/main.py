@@ -10,10 +10,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from app.core.config import settings
 from app.core.logging import configure_logging
 from app.core.observability import init_observability
 from app.core.rag import sync_policies
+from app.core.rate_limit import limiter
 from app.db.postgres import init_db, AsyncSessionLocal
 from app.workers.s3_ingest_consumer import run_sqs_consumer
 from app.api.routes import clients, recommendations, emails, ingest, advisors, whatsapp, pitch, documents, metrics, agents, approvals, auth
@@ -30,6 +34,7 @@ import app.models.email_log  # noqa: F401
 import app.models.interaction  # noqa: F401
 import app.models.whatsapp_log  # noqa: F401
 import app.models.mcp_token  # noqa: F401
+import app.models.product  # noqa: F401
 from app.scheduler.premium_reminder import run_premium_reminder_job
 import logging
 
@@ -88,6 +93,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 
 @app.middleware("http")
