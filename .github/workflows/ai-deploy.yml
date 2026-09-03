@@ -78,16 +78,15 @@ jobs:
         with: { python-version: "3.11" }
       - run: pip install -r requirements.txt
       - name: Run schema migrations
+        # auth.sql intentionally excluded: this DB never gets the ORM-managed
+        # tables (advisors, clients, ...) that init_db() creates at app boot,
+        # so `ALTER TABLE advisors` has nothing to alter here. It's only
+        # needed against prod (deploy-staging below), where those tables
+        # already exist from previous deployments.
         run: |
-          PGPASSWORD=secret psql -h localhost -U admin -d insurance_ai_eval -f migrations/init.sql
-          PGPASSWORD=secret psql -h localhost -U admin -d insurance_ai_eval -f migrations/agents.sql
-          PGPASSWORD=secret psql -h localhost -U admin -d insurance_ai_eval -f migrations/governance.sql
-          PGPASSWORD=secret psql -h localhost -U admin -d insurance_ai_eval -f migrations/hnsw_index.sql
-          # auth.sql intentionally excluded: this DB never gets the ORM-managed
-          # tables (advisors, clients, ...) that init_db() creates at app boot,
-          # so `ALTER TABLE advisors` has nothing to alter here. It's only
-          # needed against prod (deploy-staging below), where those tables
-          # already exist from previous deployments.
+          python scripts/apply_migrations.py \
+            "postgresql://admin:secret@localhost:5432/insurance_ai_eval" \
+            migrations/init.sql migrations/agents.sql migrations/governance.sql migrations/hnsw_index.sql
       - name: Ingest policy documents
         # The Policy Research agent (and its RAGAS eval) need real chunks in
         # policy_chunks — this DB is freshly migrated and otherwise empty.
@@ -148,18 +147,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install psycopg2-binary==2.9.9
+
       - name: Run production schema migrations
+        # Ledger-backed: apply_migrations.py records each applied file in a
+        # schema_migrations table and skips ones already there, so a deploy
+        # only ever applies what's actually missing from prod.
         run: |
-          for f in migrations/init.sql migrations/agents.sql migrations/governance.sql \
-                   migrations/whatsapp_logs.sql migrations/email_logs_add_edited_body.sql \
-                   migrations/rls.sql migrations/hnsw_index.sql migrations/auth.sql \
-                   migrations/roles.sql migrations/mcp_tokens.sql; do
-            echo "Applying $f"
-            psql "$MIGRATION_DB_URL" -v ON_ERROR_STOP=1 -f "$f"
-          done
+          python scripts/apply_migrations.py "$MIGRATION_DB_URL" \
+            migrations/init.sql migrations/agents.sql migrations/governance.sql \
+            migrations/whatsapp_logs.sql migrations/email_logs_add_edited_body.sql \
+            migrations/rls.sql migrations/hnsw_index.sql migrations/auth.sql \
+            migrations/roles.sql migrations/mcp_tokens.sql
         env:
           # PROD_SYNC_DATABASE_URL is a plain postgresql:// URI (libpq-compatible);
-          # PROD_DATABASE_URL is asyncpg-prefixed and won't work with psql.
+          # PROD_DATABASE_URL is asyncpg-prefixed and won't work with psycopg2.
           MIGRATION_DB_URL: ${{ secrets.PROD_SYNC_DATABASE_URL }}
 
       - name: Deploy to Lightsail
