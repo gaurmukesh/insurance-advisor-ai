@@ -22,7 +22,16 @@ from app.db.postgres import AsyncSessionLocal, init_db
 from app.core.knowledge_graph import link_policy_to_product
 from app.models.policy import Policy
 from app.models.product import PolicyProductLink
-import app.models.client  # noqa: F401 -- registers FK target before create_all
+
+# Import every ORM model so create_all can resolve the full FK chain
+# (policies -> clients -> advisors, plus product's own tables) rather than
+# just the two used directly in this script.
+import app.models.advisor  # noqa: F401
+import app.models.client  # noqa: F401
+import app.models.email_log  # noqa: F401
+import app.models.interaction  # noqa: F401
+import app.models.whatsapp_log  # noqa: F401
+import app.models.mcp_token  # noqa: F401
 
 
 async def main():

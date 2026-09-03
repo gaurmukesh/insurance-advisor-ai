@@ -17,6 +17,18 @@ from sqlalchemy import text
 from app.db.postgres import AsyncSessionLocal, init_db
 from app.core.rag import ingest_pdf
 
+# ingest_pdf's product-KG extraction step creates a Product/PolicyProductLink
+# FK to `policies` -- import it (and the other ORM models) so init_db()'s
+# create_all sees every table it needs to resolve that FK, not just Product.
+import app.models.advisor  # noqa: F401
+import app.models.client  # noqa: F401
+import app.models.policy  # noqa: F401
+import app.models.email_log  # noqa: F401
+import app.models.interaction  # noqa: F401
+import app.models.whatsapp_log  # noqa: F401
+import app.models.mcp_token  # noqa: F401
+import app.models.product  # noqa: F401
+
 
 async def main():
     await init_db()
