@@ -7,7 +7,9 @@ from sqlalchemy import select, text
 
 from app.db.postgres import AsyncSessionLocal
 from app.db.vector_store import similarity_search
+from app.core.knowledge_graph import fetch_kg_facts
 from app.models.client import Client
+from app.models.policy import Policy
 from app.modules.need_analyzer import analyze_client_needs
 from app.core.llm import chat
 
@@ -15,6 +17,8 @@ from app.core.llm import chat
 class NeedsAnalysisState(TypedDict):
     client_id: str
     client_profile: dict
+    owned_policies: list[dict]
+    kg_facts: dict
     rag_query: str
     rag_context: str
     analysis_text: str
@@ -28,18 +32,33 @@ async def load_client(state: NeedsAnalysisState) -> dict:
         row = (await db.execute(
             select(Client).where(Client.id == state["client_id"])
         )).scalar_one_or_none()
-    if not row:
-        return {"errors": [f"Client {state['client_id']} not found"]}
-    return {"client_profile": {
-        "id": row.id, "name": row.name, "age": row.age, "income": row.income,
-        "family_size": row.family_size, "risk_appetite": row.risk_appetite,
-        "goals": row.goals, "liabilities_emi": row.liabilities_emi or 0,
-        "employment_type": row.employment_type or "Not specified",
-        "health_conditions": row.health_conditions or "None",
-        "existing_coverage": row.existing_coverage or "None",
-        "city_tier": row.city_tier or "Not specified",
-        "dependents_detail": row.dependents_detail or "None",
-    }}
+        if not row:
+            return {"errors": [f"Client {state['client_id']} not found"]}
+        policies = (await db.execute(
+            select(Policy).where(Policy.client_id == row.id)
+        )).scalars().all()
+    return {
+        "client_profile": {
+            "id": row.id, "name": row.name, "age": row.age, "income": row.income,
+            "family_size": row.family_size, "risk_appetite": row.risk_appetite,
+            "goals": row.goals, "liabilities_emi": row.liabilities_emi or 0,
+            "employment_type": row.employment_type or "Not specified",
+            "health_conditions": row.health_conditions or "None",
+            "existing_coverage": row.existing_coverage or "None",
+            "city_tier": row.city_tier or "Not specified",
+            "dependents_detail": row.dependents_detail or "None",
+        },
+        "owned_policies": [
+            {"insurer_name": p.insurer_name, "product_name": p.product_name, "policy_type": p.policy_type}
+            for p in policies
+        ],
+    }
+
+
+async def fetch_kg_facts_node(state: NeedsAnalysisState) -> dict:
+    async with AsyncSessionLocal() as db:
+        kg_facts = await fetch_kg_facts(db, state["client_id"], state["client_profile"])
+    return {"kg_facts": kg_facts}
 
 
 async def build_rag_query(state: NeedsAnalysisState) -> dict:
@@ -62,7 +81,7 @@ async def fetch_context(state: NeedsAnalysisState) -> dict:
 
 async def run_analysis(state: NeedsAnalysisState) -> dict:
     async with AsyncSessionLocal() as db:
-        analysis = await analyze_client_needs(db, state["client_profile"])
+        analysis = await analyze_client_needs(db, state["client_profile"], state.get("kg_facts"))
     return {"analysis_text": analysis}
 
 
@@ -104,6 +123,7 @@ def _check_errors(state) -> str:
 def build_needs_analysis_agent():
     g = StateGraph(NeedsAnalysisState)
     g.add_node("load_client",      load_client)
+    g.add_node("fetch_kg_facts",   fetch_kg_facts_node)
     g.add_node("build_rag_query",  build_rag_query)
     g.add_node("fetch_context",    fetch_context)
     g.add_node("run_analysis",     run_analysis)
@@ -111,7 +131,8 @@ def build_needs_analysis_agent():
     g.add_node("save_interaction", save_interaction)
     g.set_entry_point("load_client")
     g.add_conditional_edges("load_client", _check_errors,
-                            {"continue": "build_rag_query", "error": END})
+                            {"continue": "fetch_kg_facts", "error": END})
+    g.add_edge("fetch_kg_facts",   "build_rag_query")
     g.add_edge("build_rag_query",  "fetch_context")
     g.add_edge("fetch_context",    "run_analysis")
     g.add_edge("run_analysis",     "extract_gaps")

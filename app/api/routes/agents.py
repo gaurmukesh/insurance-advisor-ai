@@ -13,6 +13,7 @@ from app.agents.objection_handler_agent import build_objection_handler_agent
 from app.agents.policy_research_agent import build_policy_research_agent
 from app.agents.claims_renewals_agent import build_renewals_agent
 from app.api.deps import get_current_advisor
+from app.core.knowledge_graph import fetch_kg_facts
 from app.db.postgres import get_db
 from app.models.advisor import Advisor
 from app.models.client import Client
@@ -104,9 +105,11 @@ async def agent_analyze_lead_stream(
         "dependents_detail": client.dependents_detail or "None",
     }
 
+    kg_facts = await fetch_kg_facts(db, client.id, client_profile)
+
     async def event_stream():
         chunks: list[str] = []
-        async for token in analyze_client_needs_stream(db, client_profile):
+        async for token in analyze_client_needs_stream(db, client_profile, kg_facts):
             chunks.append(token)
             yield f"data: {json.dumps(token)}\n\n"
 

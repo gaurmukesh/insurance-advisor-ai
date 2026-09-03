@@ -8,7 +8,9 @@ from sqlalchemy import select, text
 
 from app.db.postgres import AsyncSessionLocal
 from app.db.vector_store import similarity_search
+from app.core.knowledge_graph import fetch_kg_facts, format_kg_facts_for_prompt
 from app.models.client import Client
+from app.models.policy import Policy
 from app.modules.need_analyzer import analyze_client_needs
 from app.core.llm import chat
 
@@ -16,6 +18,8 @@ from app.core.llm import chat
 class ProductMatchingState(TypedDict):
     client_id: str
     client_profile: dict
+    owned_policies: list[dict]
+    kg_facts: dict
     need_analysis: str
     search_queries: list[str]   # LLM-generated targeted queries
     raw_chunks: list[dict]      # deduplicated chunks from all searches
@@ -28,23 +32,38 @@ async def load_client(state: ProductMatchingState) -> dict:
         row = (await db.execute(
             select(Client).where(Client.id == state["client_id"])
         )).scalar_one_or_none()
-    if not row:
-        return {"errors": [f"Client {state['client_id']} not found"]}
-    return {"client_profile": {
-        "id": row.id, "name": row.name, "age": row.age, "income": row.income,
-        "family_size": row.family_size, "risk_appetite": row.risk_appetite,
-        "goals": row.goals, "liabilities_emi": row.liabilities_emi or 0,
-        "employment_type": row.employment_type or "Not specified",
-        "health_conditions": row.health_conditions or "None",
-        "existing_coverage": row.existing_coverage or "None",
-        "city_tier": row.city_tier or "Not specified",
-        "dependents_detail": row.dependents_detail or "None",
-    }}
+        if not row:
+            return {"errors": [f"Client {state['client_id']} not found"]}
+        policies = (await db.execute(
+            select(Policy).where(Policy.client_id == row.id)
+        )).scalars().all()
+    return {
+        "client_profile": {
+            "id": row.id, "name": row.name, "age": row.age, "income": row.income,
+            "family_size": row.family_size, "risk_appetite": row.risk_appetite,
+            "goals": row.goals, "liabilities_emi": row.liabilities_emi or 0,
+            "employment_type": row.employment_type or "Not specified",
+            "health_conditions": row.health_conditions or "None",
+            "existing_coverage": row.existing_coverage or "None",
+            "city_tier": row.city_tier or "Not specified",
+            "dependents_detail": row.dependents_detail or "None",
+        },
+        "owned_policies": [
+            {"insurer_name": p.insurer_name, "product_name": p.product_name, "policy_type": p.policy_type}
+            for p in policies
+        ],
+    }
+
+
+async def fetch_kg_facts_node(state: ProductMatchingState) -> dict:
+    async with AsyncSessionLocal() as db:
+        kg_facts = await fetch_kg_facts(db, state["client_id"], state["client_profile"])
+    return {"kg_facts": kg_facts}
 
 
 async def run_needs_analysis(state: ProductMatchingState) -> dict:
     async with AsyncSessionLocal() as db:
-        analysis = await analyze_client_needs(db, state["client_profile"])
+        analysis = await analyze_client_needs(db, state["client_profile"], state.get("kg_facts"))
     return {"need_analysis": analysis}
 
 
@@ -104,6 +123,9 @@ Health: {p.get('health_conditions')}, Existing: {p.get('existing_coverage')}
 Policy Knowledge:
 {context}
 
+Structured Facts (ground truth from the client's actual owned policies):
+{format_kg_facts_for_prompt(state.get("kg_facts"))}
+
 Return: [{{"rank":1,"product_name":"...","insurer":"...","type":"term|health|ulip|motor",
 "premium_per_month":0,"sum_assured":"...","key_benefit":"...","why_suits":"...",
 "tax_benefit":"80C|80D|none","client_fit_score":85,"pitch_first":true}}]
@@ -142,6 +164,7 @@ def _check_errors(state) -> str:
 def build_product_matching_agent():
     g = StateGraph(ProductMatchingState)
     g.add_node("load_client",        load_client)
+    g.add_node("fetch_kg_facts",     fetch_kg_facts_node)
     g.add_node("run_needs_analysis", run_needs_analysis)
     g.add_node("generate_queries",   generate_queries)
     g.add_node("search_products",    search_products)
@@ -149,7 +172,8 @@ def build_product_matching_agent():
     g.add_node("save_recs",          save_recs)
     g.set_entry_point("load_client")
     g.add_conditional_edges("load_client", _check_errors,
-                            {"continue": "run_needs_analysis", "error": END})
+                            {"continue": "fetch_kg_facts", "error": END})
+    g.add_edge("fetch_kg_facts",     "run_needs_analysis")
     g.add_edge("run_needs_analysis", "generate_queries")
     g.add_edge("generate_queries",   "search_products")
     g.add_edge("search_products",    "rank_match")

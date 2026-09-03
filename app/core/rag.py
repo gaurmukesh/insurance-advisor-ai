@@ -7,6 +7,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
+from app.core.product_extraction import extract_and_store_product_kg
 from app.core.s3 import list_policy_pdf_keys, fetch_pdf_bytes
 from app.db.vector_store import insert_chunk, similarity_search, parse_chunk_metadata
 
@@ -19,7 +20,24 @@ class PdfExtractionError(Exception):
     without touching the DB."""
 
 
-def _extract_chunks(pdf_bytes: bytes, source: str) -> list[str]:
+# Markers that indicate a PDF is a named individual's *issued* policy (e.g.
+# data/policies/insurance_policy.pdf: "Full Name Amit Singh", "Policy Holder
+# ID PH-2024-78421", an "INSURED MEMBERS" table with DOBs) rather than a
+# generic per-product spec sheet ("Coverage Summary" / "Key Exclusions"
+# templates like the other sample PDFs). Running the former through
+# structured extraction would both mint a bogus one-off "product" row and
+# risk sending personal details through the extraction LLM call.
+_ISSUED_POLICY_MARKERS = ("policyholder details", "policy holder id", "insured members", "date of birth")
+
+
+def _looks_like_product_template(full_text: str) -> bool:
+    """False negatives (skipping a real template) just fall back to today's
+    vector-only behavior, so this errs toward skipping when unsure."""
+    lowered = full_text.lower()
+    return not any(marker in lowered for marker in _ISSUED_POLICY_MARKERS)
+
+
+def _extract_chunks_and_text(pdf_bytes: bytes, source: str) -> tuple[str, list[str]]:
     """CPU-bound PDF parsing and splitting -- run via asyncio.to_thread so it
     doesn't block the event loop (and everything else sharing it, e.g. HTTP
     request handling) for the duration of a large PDF."""
@@ -37,15 +55,33 @@ def _extract_chunks(pdf_bytes: bytes, source: str) -> list[str]:
         raise PdfExtractionError(f"{source} contains no extractable text")
 
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    return splitter.split_text(full_text)
+    return full_text, splitter.split_text(full_text)
 
 
 async def ingest_pdf_bytes(db: AsyncSession, pdf_bytes: bytes, metadata: dict) -> int:
     source = metadata.get("source", "<unknown>")
-    chunks = await asyncio.to_thread(_extract_chunks, pdf_bytes, source)
+    full_text, chunks = await asyncio.to_thread(_extract_chunks_and_text, pdf_bytes, source)
 
     for chunk in chunks:
         await insert_chunk(db, chunk, metadata)
+
+    if _looks_like_product_template(full_text):
+        try:
+            # A failure here must not poison the whole transaction -- without
+            # a SAVEPOINT, a DB-level error during extraction (e.g. a bad
+            # value on flush) aborts the entire transaction at the Postgres
+            # level, taking the chunk inserts above down with it even though
+            # they already succeeded. begin_nested() scopes the rollback to
+            # just this block.
+            async with db.begin_nested():
+                await extract_and_store_product_kg(db, full_text, source)
+        except Exception as e:
+            # A broken extraction must never roll back the chunks above --
+            # vector search should keep working even if structured KG
+            # extraction fails.
+            logger.error(f"RAG ingest: product KG extraction failed for {source}, chunks still committed — {e}")
+    else:
+        logger.info(f"RAG ingest: {source} looks like an issued policy document, not a product template — skipping KG extraction")
 
     # Commit once, after every chunk is inserted, so a crash or exception
     # partway through a large PDF leaves nothing committed -- the caller's

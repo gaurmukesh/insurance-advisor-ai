@@ -12,6 +12,7 @@ from app.models.interaction import Interaction  # noqa: F401
 from app.models.email_log import EmailLog  # noqa: F401
 from app.models.whatsapp_log import WhatsAppLog  # noqa: F401
 from app.models.mcp_token import MCPToken  # noqa: F401
+from app.core.knowledge_graph import fetch_kg_facts
 from app.models.client import Client
 from app.models.policy import Policy
 from app.modules.need_analyzer import analyze_client_needs
@@ -146,7 +147,9 @@ async def analyze_needs(client_id: str) -> str:
             return json.dumps({"error": f"Client {client_id} not found"})
         if not owns_client(row):
             return json.dumps({"error": "forbidden"})
-        return await analyze_client_needs(db, _to_dict(row))
+        profile = _to_dict(row)
+        kg_facts = await fetch_kg_facts(db, row.id, profile)
+        return await analyze_client_needs(db, profile, kg_facts)
 
 
 # ── TOOL 6: Get recommendations ───────────────────────────────────
@@ -164,8 +167,9 @@ async def get_recommendations(client_id: str) -> str:
         if not owns_client(row):
             return json.dumps({"error": "forbidden"})
         profile = _to_dict(row)
-        need_analysis = await analyze_client_needs(db, profile)
-        recs = await recommend_products(db, profile, need_analysis)
+        kg_facts = await fetch_kg_facts(db, row.id, profile)
+        need_analysis = await analyze_client_needs(db, profile, kg_facts)
+        recs = await recommend_products(db, profile, need_analysis, kg_facts)
         return json.dumps(recs, default=str)
 
 

@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
 from app.api.deps import get_current_advisor
+from app.core.knowledge_graph import fetch_kg_facts
 from app.db.postgres import get_db
 from app.models.advisor import Advisor
 from app.models.client import Client
@@ -55,7 +56,8 @@ async def analyze_client(
         "city_tier": client.city_tier or "Not specified",
     }
 
-    analysis = await analyze_client_needs(db, profile)
+    kg_facts = await fetch_kg_facts(db, client.id, profile)
+    analysis = await analyze_client_needs(db, profile, kg_facts)
     return {"client_id": client.id, "client_name": client.name, "analysis": analysis}
 
 
@@ -82,5 +84,6 @@ async def recommend(
         "city_tier": client.city_tier or "Not specified",
     }
 
-    recommendations = await recommend_products(db, profile, data.need_analysis)
+    kg_facts = await fetch_kg_facts(db, client.id, profile)
+    recommendations = await recommend_products(db, profile, data.need_analysis, kg_facts)
     return {"client_id": client.id, "client_name": client.name, "recommendations": recommendations}

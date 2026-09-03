@@ -1,6 +1,7 @@
 import json
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.llm import chat
+from app.core.knowledge_graph import format_kg_facts_for_prompt
 from app.core.rag import retrieve_context
 from app.core.guardrails import validate_output
 
@@ -27,7 +28,9 @@ Return exactly this structure:
 Only one product should have pitch_first=true."""
 
 
-async def recommend_products(db: AsyncSession, client_profile: dict, need_analysis: str) -> list[dict]:
+async def recommend_products(
+    db: AsyncSession, client_profile: dict, need_analysis: str, kg_facts: dict | None = None
+) -> list[dict]:
     query = f"{client_profile.get('goals', '')} insurance {client_profile.get('risk_appetite', '')} risk"
     context = await retrieve_context(db, query, top_k=6)
 
@@ -54,6 +57,9 @@ Need Analysis Summary:
 
 Available Policy Information:
 {context}
+
+Structured Facts (ground truth from the client's actual owned policies):
+{format_kg_facts_for_prompt(kg_facts)}
 """
 
     raw = await chat(SYSTEM_PROMPT, user_message, trace_name="product_recommender")

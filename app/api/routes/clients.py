@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from typing import Optional
 from app.api.deps import get_current_advisor
 from app.db.postgres import get_db
+from app.core.knowledge_graph import link_policy_to_product
 from app.models.advisor import Advisor
 from app.models.client import Client
 from app.models.policy import Policy
@@ -158,6 +159,8 @@ async def create_policy(
     await _get_own_client(db, data.client_id, current)
     policy = Policy(**data.model_dump())
     db.add(policy)
+    await db.flush()
+    await link_policy_to_product(db, policy)
     await db.commit()
     await db.refresh(policy)
     return policy
