@@ -22,6 +22,8 @@ An enterprise-grade AI platform for insurance advisors — agentic lead manageme
 | Governance: PII guard + audit log + IRDAI guardrails | ✅ |
 | Prompt registry (versioned prompts in Postgres) | ✅ |
 | Semantic cache (Redis) | ✅ |
+| Rate-limited login (brute-force protection) | ✅ |
+| Product knowledge graph (coverage/exclusion overlap + gap detection) | ✅ |
 | CI/CD with AI eval gate | ✅ |
 | Row-level security (multi-advisor isolation) | ✅ |
 | HNSW vector index (fast similarity search) | ✅ |
@@ -83,6 +85,12 @@ An enterprise-grade AI platform for insurance advisors — agentic lead manageme
 - **IRDAI Guardrails** — blocks outputs containing prohibited marketing claims ("guaranteed returns", "no risk", etc.)
 - **Prompt Registry** — versioned prompts stored in Postgres; update without redeployment
 
+### Product Knowledge Graph
+
+Structured facts layered on top of RAG, not a replacement for it. At ingestion time, product spec PDFs (e.g. "Coverage Summary" / "Key Exclusions" templates) are parsed by an LLM into `Product` → `CoverageItem`/`ExclusionItem` rows against a closed category vocabulary (`hospitalisation`, `critical_illness`, `pre_existing_disease`, ...), so cross-insurer phrasing differences don't block matching. A PDF that looks like a named individual's *issued* policy rather than a generic product template is skipped by a doc-type gate (`app/core/rag.py::_looks_like_product_template`) — no PII reaches the extraction call.
+
+Each client's actual `Policy` rows link to a `Product` by exact insurer/product-name match (`app/core/knowledge_graph.py::link_policy_to_product`) at creation time. `find_coverage_overlaps` and `find_coverage_gaps` then feed a "Structured Facts" section into every need-analysis/recommendation prompt — both LangGraph agents, the MCP tools, and the REST recommendation routes — so the LLM reasons over the client's real owned coverage, not just semantically-retrieved prose.
+
 ---
 
 ## Tech Stack
@@ -127,12 +135,16 @@ insurance-advisor-ai/
 │   │   ├── guardrails.py        # IRDAI output validation
 │   │   ├── prompt_registry.py   # Versioned prompts from Postgres
 │   │   ├── semantic_cache.py    # Redis-backed LLM response cache
+│   │   ├── rate_limit.py        # slowapi limiter (10/min on /login)
+│   │   ├── knowledge_graph.py   # Coverage overlap/gap queries, policy<->product linking
+│   │   ├── product_extraction.py # LLM extraction of coverage/exclusion facts at ingest
 │   │   ├── config.py
 │   │   └── observability.py     # LangFuse + Sentry init
 │   ├── mcp/
 │   │   └── server.py            # MCP server — 10 tools for Claude Desktop
 │   ├── modules/                 # Core AI modules
 │   ├── models/                  # SQLAlchemy ORM models
+│   │   └── product.py           # Product / CoverageItem / ExclusionItem / PolicyProductLink
 │   ├── db/
 │   │   ├── postgres.py          # Async engine + RLS session dependency
 │   │   └── vector_store.py      # pgvector store + similarity search
@@ -216,18 +228,22 @@ docker compose up -d db
 
 ### 3. Run migrations
 
+`scripts/apply_migrations.py` records each applied file in a `schema_migrations`
+ledger table and skips what's already there, so it's safe to re-run (this is
+what CI/CD uses against prod — see `.github/workflows/ai-deploy.yml`):
+
 ```bash
-psql $SYNC_DATABASE_URL -f migrations/init.sql
-psql $SYNC_DATABASE_URL -f migrations/agents.sql
-psql $SYNC_DATABASE_URL -f migrations/governance.sql
-psql $SYNC_DATABASE_URL -f migrations/hnsw_index.sql
-psql $SYNC_DATABASE_URL -f migrations/rls.sql
-psql $SYNC_DATABASE_URL -f migrations/whatsapp_logs.sql
-psql $SYNC_DATABASE_URL -f migrations/email_logs_add_edited_body.sql
-psql $SYNC_DATABASE_URL -f migrations/auth.sql
-psql $SYNC_DATABASE_URL -f migrations/roles.sql
-psql $SYNC_DATABASE_URL -f migrations/mcp_tokens.sql
+python scripts/apply_migrations.py "$SYNC_DATABASE_URL" \
+  migrations/init.sql migrations/agents.sql migrations/governance.sql \
+  migrations/whatsapp_logs.sql migrations/email_logs_add_edited_body.sql \
+  migrations/rls.sql migrations/hnsw_index.sql migrations/auth.sql \
+  migrations/roles.sql migrations/mcp_tokens.sql
 ```
+
+Note: `policies`, `clients`, `advisors`, and the product-knowledge-graph tables
+(`products`, `coverage_items`, `exclusion_items`, `policy_product_link`) are
+SQLAlchemy ORM models, created automatically by `init_db()` on app startup —
+not part of the `migrations/` directory.
 
 ### 4. Run the API
 
