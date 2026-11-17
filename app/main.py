@@ -20,7 +20,7 @@ from app.core.rag import sync_policies
 from app.core.rate_limit import limiter
 from app.db.postgres import init_db, AsyncSessionLocal
 from app.workers.s3_ingest_consumer import run_sqs_consumer
-from app.api.routes import clients, recommendations, emails, ingest, advisors, whatsapp, pitch, documents, metrics, agents, approvals, auth
+from app.api.routes import clients, recommendations, emails, ingest, advisors, whatsapp, pitch, documents, metrics, agents, approvals, auth, claims
 from app.mcp.server import mcp
 from app.mcp.auth_middleware import MCPAuthMiddleware
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,6 +35,7 @@ import app.models.interaction  # noqa: F401
 import app.models.whatsapp_log  # noqa: F401
 import app.models.mcp_token  # noqa: F401
 import app.models.product  # noqa: F401
+import app.models.claim  # noqa: F401
 from app.scheduler.premium_reminder import run_premium_reminder_job
 import logging
 
@@ -81,8 +82,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Insurance Advisor AI",
-    description="AI assistant for insurance advisors",
+    title="Claims Settlement Analysis",
+    description="Historical claim settlement analytics: rejection/approval reasons and claimant-background correlation",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -144,6 +145,7 @@ app.include_router(documents.router)
 app.include_router(metrics.router)
 app.include_router(agents.router)
 app.include_router(approvals.router)
+app.include_router(claims.router)
 
 
 @app.get("/health")

@@ -21,3 +21,6 @@ dashboard/out/
 # Misc
 .DS_Store
 *.log
+
+# Generated / imported claim extracts
+data/claims/

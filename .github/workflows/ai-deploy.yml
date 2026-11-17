@@ -160,7 +160,7 @@ jobs:
             migrations/init.sql migrations/agents.sql migrations/governance.sql \
             migrations/whatsapp_logs.sql migrations/email_logs_add_edited_body.sql \
             migrations/rls.sql migrations/hnsw_index.sql migrations/auth.sql \
-            migrations/roles.sql migrations/mcp_tokens.sql
+            migrations/roles.sql migrations/mcp_tokens.sql migrations/claims.sql
         env:
           # PROD_SYNC_DATABASE_URL is a plain postgresql:// URI (libpq-compatible);
           # PROD_DATABASE_URL is asyncpg-prefixed and won't work with psycopg2.
