@@ -12,6 +12,7 @@ from app.models.interaction import Interaction  # noqa: F401
 from app.models.email_log import EmailLog  # noqa: F401
 from app.models.whatsapp_log import WhatsAppLog  # noqa: F401
 from app.models.mcp_token import MCPToken  # noqa: F401
+from app.core.claims_analytics import Period, reason_breakdown, rejection_correlation
 from app.core.knowledge_graph import fetch_kg_facts
 from app.models.client import Client
 from app.models.policy import Policy
@@ -22,11 +23,12 @@ from app.db.vector_store import similarity_search
 from app.mcp.rbac import authorize, scoped_advisor_id, owns_client
 
 mcp = FastMCP(
-    "Insurance Advisor AI",
+    "Claims Settlement Analysis",
     instructions=(
-        "Tools for managing insurance leads, running AI need analysis, "
-        "generating product recommendations, pitches, handling objections, "
-        "and searching policy documents."
+        "Tools for analysing historical claim settlements: primary rejection and "
+        "approval reasons over a period, and how claimant background correlates "
+        "with rejection. Also exposes lead management, need analysis, product "
+        "recommendations and policy document search."
     ),
 )
 
@@ -250,6 +252,42 @@ async def get_upcoming_renewals(advisor_id: str, days: int = 30) -> str:
             }
             for p, c in rows
         ], default=str)
+
+
+
+# ── TOOL 11: Primary rejection reasons ────────────────────────────
+@mcp.tool()
+@authorize("mcp:get_rejection_reasons")
+async def get_rejection_reasons(months: int = 12) -> str:
+    """Primary reason claim settlements were rejected over the last N months
+    (default 12), with the full breakdown by normalised reason category."""
+    async with AsyncSessionLocal() as db:
+        result = await reason_breakdown(db, "rejected", Period.last_months(months))
+        return json.dumps(result, default=str)
+
+
+# ── TOOL 12: Primary approval reasons ─────────────────────────────
+@mcp.tool()
+@authorize("mcp:get_approval_reasons")
+async def get_approval_reasons(months: int = 12) -> str:
+    """Primary reason claims were approved (fully or partially) over the last
+    N months (default 12), with the full breakdown by reason category."""
+    async with AsyncSessionLocal() as db:
+        result = await reason_breakdown(db, "approved", Period.last_months(months))
+        return json.dumps(result, default=str)
+
+
+# ── TOOL 13: Rejection vs claimant background ─────────────────────
+@mcp.tool()
+@authorize("mcp:get_rejection_correlation")
+async def get_rejection_correlation(months: int = 12) -> str:
+    """How strongly each claimant background attribute (age, income, tenure,
+    prior claims, pre-existing conditions, occupation, city tier, state,
+    purchase channel, gender) is associated with claim rejection over the last
+    N months, ranked by Cramer's V, with per-bucket rejection rates."""
+    async with AsyncSessionLocal() as db:
+        result = await rejection_correlation(db, Period.last_months(months))
+        return json.dumps(result, default=str)
 
 
 if __name__ == "__main__":

@@ -30,6 +30,7 @@ def _advisor_dict(advisor: Advisor) -> dict:
         "email": advisor.email,
         "phone": advisor.phone,
         "license_no": advisor.license_no,
+        "role": advisor.role,
     }
 
 

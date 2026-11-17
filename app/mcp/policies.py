@@ -21,6 +21,9 @@ _READ_AND_ASSIST_ACTIONS = [
     "mcp:handle_client_objection",
     "mcp:search_policy_docs",
     "mcp:get_upcoming_renewals",
+    "mcp:get_rejection_reasons",
+    "mcp:get_approval_reasons",
+    "mcp:get_rejection_correlation",
 ]
 
 _WRITE_ACTIONS = [

@@ -100,6 +100,7 @@ export interface Advisor {
   email: string;
   phone: string;
   license_no?: string;
+  role?: "advisor" | "manager" | "admin";
 }
 
 // --- Auth ---
@@ -313,6 +314,115 @@ export const compareDocuments = (fileA: File, fileB: File) => {
       form,
       { headers: { "Content-Type": "multipart/form-data" } }
     )
+    .then((r) => r.data);
+};
+
+// --- Claims Settlement Analysis ---
+export interface ClaimsPeriod {
+  since: string;
+  until: string;
+}
+
+export interface ReasonRow {
+  category: string;
+  description: string;
+  count: number;
+  share_pct: number;
+  total_claimed_amount: number;
+  total_settled_amount: number;
+}
+
+export interface ReasonBreakdown {
+  outcome: "rejected" | "approved";
+  period: ClaimsPeriod;
+  total_decided_claims: number;
+  claims_in_outcome: number;
+  outcome_rate_pct: number;
+  primary_reason: ReasonRow | null;
+  reasons: ReasonRow[];
+  explanation?: string;
+}
+
+export interface CorrelationBucket {
+  value: string;
+  claims: number;
+  rejected: number;
+  rejection_rate_pct: number;
+  lift_vs_overall: number | null;
+  top_rejection_reason: string | null;
+  low_sample: boolean;
+}
+
+export interface AttributeCorrelation {
+  attribute: string;
+  cramers_v: number | null;
+  strength: "negligible" | "weak" | "moderate" | "strong" | "insufficient_data";
+  chi2: number | null;
+  p_value: number | null;
+  significant: boolean;
+  point_biserial: { r: number; p_value: number } | null;
+  unknown_count: number;
+  buckets: CorrelationBucket[];
+}
+
+export interface RejectionCorrelation {
+  period: ClaimsPeriod;
+  decided_claims: number;
+  rejected_claims: number;
+  overall_rejection_rate_pct: number;
+  strongest_factors: string[];
+  attributes: AttributeCorrelation[];
+  caveat: string;
+  explanation?: string;
+}
+
+export interface SettlementOverview {
+  period: ClaimsPeriod;
+  by_year: Array<{
+    year: number;
+    decided_claims: number;
+    rejected_claims: number;
+    settlement_ratio_pct: number;
+    amount_settlement_ratio_pct: number;
+  }>;
+}
+
+export interface ClaimsImportResult {
+  inserted: number;
+  skipped_duplicates: number;
+  claimants_created: number;
+  classified_by: Record<string, number>;
+  errors: Array<{ row: number; error: string }>;
+  error_count: number;
+}
+
+export const getRejectionReasons = (months: number, explain = false) =>
+  api
+    .get<ReasonBreakdown>("/api/v1/claims/analysis/rejection-reasons", { params: { months, explain } })
+    .then((r) => r.data);
+
+export const getApprovalReasons = (months: number, explain = false) =>
+  api
+    .get<ReasonBreakdown>("/api/v1/claims/analysis/approval-reasons", { params: { months, explain } })
+    .then((r) => r.data);
+
+export const getRejectionCorrelation = (months: number, explain = false) =>
+  api
+    .get<RejectionCorrelation>("/api/v1/claims/analysis/rejection-correlation", { params: { months, explain } })
+    .then((r) => r.data);
+
+export const getSettlementOverview = (months: number) =>
+  api
+    .get<SettlementOverview>("/api/v1/claims/analysis/overview", { params: { months } })
+    .then((r) => r.data);
+
+export const importClaimsCsv = (file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  return api
+    .post<ClaimsImportResult>("/api/v1/claims/import", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })
     .then((r) => r.data);
 };
 

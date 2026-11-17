@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, Bell, Mail, LayoutDashboard, Shield, MessageCircle, Clock, FileText, BarChart2, LogOut } from "lucide-react";
+import { Users, Bell, Mail, LayoutDashboard, Shield, MessageCircle, Clock, FileText, BarChart2, LogOut, ClipboardCheck } from "lucide-react";
 import { logout } from "@/lib/api";
 import { useAdvisor } from "@/lib/AdvisorContext";
 
@@ -14,6 +14,7 @@ const nav = [
   { href: "/whatsapp-logs", label: "WhatsApp Logs", icon: MessageCircle },
   { href: "/documents", label: "Documents", icon: FileText },
   { href: "/metrics", label: "Metrics", icon: BarChart2 },
+  { href: "/claims", label: "Claims Analysis", icon: ClipboardCheck },
 ];
 
 export default function Sidebar() {
@@ -23,7 +24,7 @@ export default function Sidebar() {
     <aside className="w-60 bg-white border-r border-gray-200 flex flex-col">
       <div className="flex items-center gap-2 px-6 py-5 border-b border-gray-200">
         <Shield className="text-blue-600" size={22} />
-        <span className="font-semibold text-gray-800 text-sm">Insurance Advisor AI</span>
+        <span className="font-semibold text-gray-800 text-sm">Claims Settlement Analysis</span>
       </div>
       <nav className="flex-1 px-3 py-4 space-y-1">
         {nav.map(({ href, label, icon: Icon }) => {
