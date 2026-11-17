@@ -1,10 +1,40 @@
-# Insurance Advisor AI
+# Claims Settlement Analysis
 
-An enterprise-grade AI platform for insurance advisors — agentic lead management, AI-powered need analysis, product recommendations, pitch generation, objection handling, and automated client communications.
+AI-assisted analytics over many years of insurance claim settlements: why claims get rejected, why they get approved, and how rejection correlates with the claimant's background.
+
+Built on the Insurance Advisor AI platform (FastAPI, Postgres, MCP, PII guard, audit log), whose advisor-facing features are still present below the claims module.
 
 ---
 
-## Features
+## Claims Settlement Analysis
+
+| Question | REST endpoint | MCP tool |
+|---|---|---|
+| Primary reason for rejecting a claim in the past year | `GET /api/v1/claims/analysis/rejection-reasons?months=12` | `get_rejection_reasons` |
+| Primary reason for accepting a claim | `GET /api/v1/claims/analysis/approval-reasons?months=12` | `get_approval_reasons` |
+| Correlation between rejection and claimant background | `GET /api/v1/claims/analysis/rejection-correlation?months=12` | `get_rejection_correlation` |
+| Year-by-year settlement ratio across the full history | `GET /api/v1/claims/analysis/overview?months=120` | — |
+
+Every analysis endpoint takes `months` (look-back ending today) or explicit `since`/`until` dates. Claims are placed in a period by **decision date**. Add `explain=true` for a plain-language summary written by the LLM.
+
+**How it works**
+
+1. **Import:** `POST /api/v1/claims/import` (manager/admin only) loads a CSV extract, with one row per claim and the claimant's background repeated on each row. Claimants are de-duplicated on `claimant_ref` and claims on `claim_no`, so re-importing is safe. The column list is in `app/core/claims_ingest.py`.
+2. **Reason normalisation:** each insurer remark ("Repudiated - PED not disclosed at proposal stage") is mapped onto a fixed taxonomy in `app/core/claim_reasons.py` (`non_disclosure`, `waiting_period`, `policy_exclusion`, `insufficient_documents`, ... / `network_cashless`, `complete_documentation`, `covered_event`, ...). Keyword rules handle the common phrasings. Only remarks that no rule matches go to the LLM in batches, and any answer outside the taxonomy becomes `other`. A `reason_category` column in the CSV, if present, takes precedence.
+3. **Primary reason:** a deterministic SQL breakdown by category with counts, share and amounts. `other` is a catch-all, so the primary reason is the top *named* category.
+4. **Background correlation:** for each attribute (age, income, policy tenure, prior claims, pre-existing conditions, gender, occupation, city tier, state, purchase channel) the analysis reports per-bucket rejection rate, lift versus the overall rate, the dominant rejection reason in that bucket, a chi-square test and Cramér's V. Numeric attributes also get a point-biserial r. Attributes are ranked by Cramér's V, and buckets with fewer than 30 claims are flagged `low_sample`.
+
+All numbers are computed in code (`app/core/claims_analytics.py`). The LLM only sees aggregates, and only when `explain=true`. Protected attributes such as gender are reported for fairness auditing, not as decision inputs.
+
+**Try it with synthetic data.** `scripts/generate_synthetic_claims.py` writes a multi-year history with known planted signals: pre-existing conditions lead to non-disclosure rejections, tenure under 2 years leads to waiting-period rejections, and gender has no effect. Use it to check that the analysis recovers them:
+
+```bash
+python scripts/generate_synthetic_claims.py --claims 20000 --years 6 --load
+```
+
+---
+
+## Platform Features (inherited from Insurance Advisor AI)
 
 | Feature | Status |
 |---|---|
@@ -24,6 +54,7 @@ An enterprise-grade AI platform for insurance advisors — agentic lead manageme
 | Semantic cache (Redis) | ✅ |
 | Rate-limited login (brute-force protection) | ✅ |
 | Product knowledge graph (coverage/exclusion overlap + gap detection) | ✅ |
+| Claims settlement analysis (rejection/approval reasons, background correlation) | ✅ |
 | CI/CD with AI eval gate | ✅ |
 | Row-level security (multi-advisor isolation) | ✅ |
 | HNSW vector index (fast similarity search) | ✅ |
@@ -40,7 +71,7 @@ An enterprise-grade AI platform for insurance advisors — agentic lead manageme
 │                                                                   │
 │  ┌──────────────┐   ┌──────────────┐   ┌──────────────────────┐ │
 │  │  MCP Server  │   │  REST API    │   │  LangGraph Agents    │ │
-│  │  (10 tools)  │   │  (FastAPI)   │   │  (6 agents)          │ │
+│  │  (13 tools)  │   │  (FastAPI)   │   │  (6 agents)          │ │
 │  └──────┬───────┘   └──────┬───────┘   └──────────┬───────────┘ │
 │         └──────────────────┴────────────────────────┘            │
 │                            │                                      │
@@ -237,7 +268,7 @@ python scripts/apply_migrations.py "$SYNC_DATABASE_URL" \
   migrations/init.sql migrations/agents.sql migrations/governance.sql \
   migrations/whatsapp_logs.sql migrations/email_logs_add_edited_body.sql \
   migrations/rls.sql migrations/hnsw_index.sql migrations/auth.sql \
-  migrations/roles.sql migrations/mcp_tokens.sql
+  migrations/roles.sql migrations/mcp_tokens.sql migrations/claims.sql
 ```
 
 Note: `policies`, `clients`, `advisors`, and the product-knowledge-graph tables
@@ -345,6 +376,11 @@ python -m app.mcp.server
 | POST | `/api/v1/ingest` | Ingest policy PDF |
 | POST | `/api/v1/documents/search` | Semantic policy search |
 | GET | `/api/v1/metrics` | Business metrics |
+| POST | `/api/v1/claims/import` | Import historical claims CSV (manager/admin) |
+| GET | `/api/v1/claims/analysis/rejection-reasons` | Primary rejection reasons in a period |
+| GET | `/api/v1/claims/analysis/approval-reasons` | Primary approval reasons in a period |
+| GET | `/api/v1/claims/analysis/rejection-correlation` | Rejection vs claimant background |
+| GET | `/api/v1/claims/analysis/overview` | Year-by-year settlement ratio |
 
 ---
 

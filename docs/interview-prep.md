@@ -307,7 +307,7 @@ LangGraph conditional edges. Every node that can fail returns `{"errors": [...]}
 Currently agents fail with 500. Right fix: retry with exponential backoff using tenacity, fallback to simpler prompt or cached response.
 
 **Q: How does your system scale?**
-Single Lightsail container today. Bottleneck is OpenAI latency (8–12s), not compute. Scale: more Lightsail nodes behind load balancer, PgBouncer for connection pooling, async FastAPI already handles concurrent requests well.
+Single Lightsail container today. I've since designed what 10,000 concurrent users looks like on AWS API Gateway + EKS — see Section 13 for the full breakdown, including two real gaps I found auditing my own code against that design.
 
 ### AI / ML
 
@@ -390,3 +390,112 @@ Shows maturity when asked "what's missing?":
 4. **Caching** — cache embeddings for repeated queries, cache needs analysis per client
 5. **RAGAS eval** — proper RAG quality metrics beyond latency checks
 6. **Observability** — structured logs with trace IDs across all agent nodes
+
+---
+
+## 13. Scaling to 10,000 Concurrent Users — System Design Deep Dive
+
+Use this when asked "how would this scale" or for an open-ended system design
+question. This is the strongest system-design story in the project because
+it isn't hypothetical — it's a real audit against real code, and it found
+real gaps.
+
+### The setup
+
+> "I designed what this platform looks like at 10,000 concurrent advisor
+> sessions, fronted by AWS API Gateway and an EKS cluster instead of the
+> single Lightsail container it runs on today."
+
+### The one decision that matters most
+
+> "Every AI-invoking route today runs the OpenAI call inline and holds the
+> HTTP connection until it returns — 2 to 8 seconds. That's fine at current
+> scale. At 10,000 concurrent users it's the difference between needing 30
+> pods and needing 300. So the core change is splitting the fleet in two: an
+> `api-deployment` that only does CRUD and enqueues AI work to SQS, and a
+> `worker-deployment` that's the only thing that calls OpenAI — autoscaled
+> independently on SQS queue depth via KEDA instead of on request rate. API
+> pods stay cheap and short-lived; only the worker pool scales with LLM
+> concurrency."
+
+### Capacity math (have these numbers ready)
+
+| Assumption | Value |
+|---|---|
+| Concurrent advisor sessions | 10,000 |
+| Req/s per active session | ~0.3–0.7 |
+| Resulting CRUD baseline/peak | ~3,000–7,000 req/s |
+| % of requests that invoke an LLM | 2–5% |
+| Concurrent LLM calls in flight | ~90–350 |
+| api-deployment pods (HPA on RPS) | 8–40 |
+| worker-deployment pods (KEDA on SQS depth) | 15–45 |
+
+> "Without the split: 300 concurrent 5-second LLM calls means 1,500
+> pod-seconds/second of blocked capacity — over 150 dedicated pods just
+> absorbing latency, before a single CRUD request is served."
+
+### Why API Gateway *and* CloudFront, not one or the other
+
+> "They front different traffic. CloudFront caches the dashboard's static
+> JS/CSS at the edge so it never touches compute — pure asset delivery. API
+> Gateway sits in front of every `/api/v1/*` call doing JWT auth, per-advisor
+> throttling, and request validation. Routing static assets through API
+> Gateway means paying per-request pricing for files that never change;
+> routing API calls through CloudFront means losing per-tenant throttling."
+
+### Two gaps I found by tracing my own code against this design
+
+Lead with this if asked "tell me about a design flaw you caught yourself."
+
+1. **The login rate limiter is in-memory, per-pod.** `Limiter(key_func=
+   get_remote_address, ...)` in `app/core/rate_limit.py` has no shared
+   backend. At one container, "10/minute" is real. At 20 autoscaled pods, an
+   attacker round-robining across them effectively gets 10×20/minute before
+   any single pod's counter trips — brute-force protection silently weakens
+   in proportion to how well the autoscaler is doing its job. Fix: back it
+   with the same Redis being added for the semantic cache.
+
+2. **One endpoint doesn't fit the async-queue pattern.** `/analyze-lead/
+   stream` is a real SSE endpoint — it streams tokens live from OpenAI to
+   the browser over one held-open connection. You can't hand a live stream
+   off between worker pods picked by a queue consumer. That endpoint needs
+   its own answer: keep it synchronous (accepting the pod-blocking cost the
+   queue exists to avoid) or move it to `worker-deployment` behind a load
+   balancer configured for long-lived connections.
+
+> "I didn't just draw the diagram — I went back through my own route
+> handlers to see whether the design actually held up against what's really
+> there. It didn't, in two places. That audit is what I'd want a team to see
+> me do before this went anywhere near production."
+
+### Other production risks worth naming if asked "what else"
+
+- OpenAI's account-level rate limits are the real ceiling, not pod count —
+  KEDA can scale workers past what your OpenAI tier allows
+- RDS connection exhaustion without RDS Proxy once pod count is high
+- Semantic cache "degrades gracefully" masks a real cost/latency spike if
+  Redis has a blip — needs an explicit cache-hit-rate alert, not just uptime
+- RLS policies exist in `rls.sql` but nothing sets the session variable they
+  key off (`get_db_with_advisor` is dead code) — isolation today is enforced
+  entirely by manual `WHERE advisor_id ==` filters per route, not Postgres
+
+### Likely follow-ups
+
+**Q: Why SQS and not Kafka/SNS?**
+> "SQS is the simplest thing that satisfies the requirement — one job, one
+> consumer, built-in DLQ for failed agent runs. Kafka fits if I need
+> multiple independent consumers reacting to the same event, or replay — I
+> don't have that requirement. SNS fans out, which is the opposite of what I
+> need: exactly one worker should pick up each job."
+
+**Q: Why KEDA instead of just HPA for the workers?**
+> "HPA scales on CPU/memory, which doesn't track what matters for the
+> worker pool — how many jobs are backed up in SQS. KEDA scales directly on
+> `ApproximateNumberOfMessages`, so the pool grows because there's a
+> backlog, not because CPU happened to spike."
+
+**Q: What breaks first at 10,000 users if none of this is done?**
+> "The rate limiter, actually — before the LLM cost problem even shows up.
+> Assuming that's fixed: the single Postgres connection pool. Every pod's
+> own asyncpg pool competing for the same connection ceiling fails before
+> compute does."
